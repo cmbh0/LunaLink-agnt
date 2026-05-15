@@ -43,13 +43,9 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Regenerate Android wrapper if missing
+      - name: Repair generated Flutter files only
         run: |
-          if [ ! -f android/gradlew ] || [ ! -f android/gradle/wrapper/gradle-wrapper.properties ]; then
-            flutter create --platforms=android --project-name lunalink_agnt --org com.lunalink .
-          fi
-          # flutter create may generate the stock counter test when repairing
-          # Android scaffolding; remove it because this project uses its own tests.
+          flutter create --platforms=android --project-name lunalink_agnt --org com.lunalink --no-overwrite .
           if [ -f test/widget_test.dart ] && grep -q "MyApp" test/widget_test.dart; then
             rm test/widget_test.dart
           fi
