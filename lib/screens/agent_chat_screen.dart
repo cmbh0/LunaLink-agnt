@@ -78,20 +78,21 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
         child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('AI 设置', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
           const SizedBox(height: 14),
-          DropdownButtonFormField<AiProviderType>(
-            value: provider,
-            onChanged: (v) => setDialog(() { provider = v!; endpoint.text = providerEndpoints[provider] ?? endpoint.text; }),
-            items: AiProviderType.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name))).toList(),
-            decoration: const InputDecoration(labelText: '模型提供商'),
+          DropdownButtonFormField<AiServiceConfig>(
+            value: cfg,
+            onChanged: (v) { if (v != null) setDialog(() { state.setActiveAiConfig(v.id); }); },
+            items: state.aiConfigs.map((e) => DropdownMenuItem(value: e, child: Text('${e.name} · ${e.model}'))).toList(),
+            decoration: _fieldDecoration('当前供应商配置'),
           ),
+          const SizedBox(height: 8),
+          TextField(controller: endpoint, decoration: _fieldDecoration('API Base URL / Endpoint')),
           const SizedBox(height: 8),
           DropdownButtonFormField<AiApiMode>(
             value: apiMode,
             onChanged: (v) => setDialog(() => apiMode = v!),
-            items: const [DropdownMenuItem(value: AiApiMode.openAiChat, child: Text('OpenAI 通用聊天')), DropdownMenuItem(value: AiApiMode.responses, child: Text('Responses / RESP')), DropdownMenuItem(value: AiApiMode.messages, child: Text('其他 Messages'))],
-            decoration: const InputDecoration(labelText: '接口模式'),
+            items: AiApiMode.values.map((e) => DropdownMenuItem(value: e, child: Text(e.label))).toList(),
+            decoration: _fieldDecoration('接口模式'),
           ),
-          const SizedBox(height: 8), TextField(controller: endpoint, decoration: _fieldDecoration('接口地址 Endpoint')),
           const SizedBox(height: 8), TextField(controller: model, decoration: _fieldDecoration('当前模型 ID')),
           const SizedBox(height: 8), TextField(controller: models, decoration: _fieldDecoration('可快捷切换模型，英文逗号分隔')),
           Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () async {
@@ -137,10 +138,27 @@ class _TopBar extends StatelessWidget {
           ]),
         ),
         const Spacer(),
+        IconButton(onPressed: () => _showAbout(context), icon: const Icon(Icons.favorite_border_rounded, size: 22)),
         IconButton(onPressed: onSettings, icon: const Icon(Icons.tune_rounded, size: 24)),
       ]),
     );
   }
+}
+
+Future<void> _showAbout(BuildContext context) async {
+  await showModalBottomSheet<void>(context: context, showDragHandle: true, builder: (_) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+    child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('关于 LunaLink Agent', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 10),
+      const Text('本软件由北海 cmbh 开发。制作不易，如果你愿意，可以赏点饭吃。'),
+      const SizedBox(height: 12),
+      ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network('https://img.cdn1.vip/i/6a06eaf82e1cb_1778838264.webp', height: 220, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Text('赞赏码图片加载失败'))),
+      const SizedBox(height: 12),
+      const Text('也可以注册赞助本 App 的 GPT 中转站：'),
+      SelectableText('https://api.headone.fit/register?aff=nZoJ', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
+    ])),
+  ));
 }
 
 class _Segment extends StatelessWidget {
@@ -216,7 +234,7 @@ class _Bubble extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (!isUser && message.modelLabel?.isNotEmpty == true) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(message.modelLabel!, style: const TextStyle(fontSize: 11, color: MoonColors.muted))),
             if (message.thinking?.isNotEmpty == true) _Fold(title: '思考内容', icon: Icons.psychology_rounded, child: Text(message.thinking!, style: const TextStyle(color: MoonColors.muted))),
-            MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.42), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn), codeblockDecoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12)))),
+            MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.42), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn, backgroundColor: Color(0xFFF5F2FF)), codeblockPadding: const EdgeInsets.all(12), codeblockDecoration: BoxDecoration(color: const Color(0xFFF6F2FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2D8FF))))),,
             for (final t in message.toolCalls) _ToolApproval(call: t),
             for (final c in message.changes) _ChangeApproval(change: c),
           ]),

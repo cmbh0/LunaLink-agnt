@@ -19,8 +19,14 @@ class MoonScaffold extends StatelessWidget {
       );
 }
 
-class _ConversationDrawer extends StatelessWidget {
+class _ConversationDrawer extends StatefulWidget {
   const _ConversationDrawer();
+  @override
+  State<_ConversationDrawer> createState() => _ConversationDrawerState();
+}
+
+class _ConversationDrawerState extends State<_ConversationDrawer> {
+  final opened = <String>{};
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -42,26 +48,14 @@ class _ConversationDrawer extends StatelessWidget {
             final selected = c.id == state.conversationId;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Dismissible(
-                key: ValueKey(c.id),
-                direction: DismissDirection.endToStart,
-                confirmDismiss: (_) async => false,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 10),
-                  decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(14)),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-                    _HistoryAction(icon: Icons.vertical_align_top_rounded, label: '置顶', onTap: () => context.read<AppState>().pinConversation(c.id)),
-                    _HistoryAction(icon: Icons.arrow_upward_rounded, label: '上移', onTap: () => context.read<AppState>().moveConversationUp(c.id)),
-                    _HistoryAction(icon: Icons.delete_outline_rounded, label: '删除', danger: true, onTap: () => context.read<AppState>().deleteConversation(c.id)),
-                  ]),
-                ),
-                child: ListTile(
+              child: Column(children: [
+                ListTile(
                   dense: true,
                   selected: selected,
                   selectedTileColor: const Color(0xFFF0ECFF),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   leading: const Icon(Icons.chat_bubble_outline_rounded, size: 19),
+                  trailing: IconButton(icon: Icon(opened.contains(c.id) ? Icons.keyboard_arrow_right_rounded : Icons.keyboard_arrow_left_rounded), onPressed: () => setState(() { opened.contains(c.id) ? opened.remove(c.id) : opened.add(c.id); })),
                   title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                   subtitle: Text(c.updatedAt.toLocal().toString().split('.').first, style: const TextStyle(fontSize: 11)),
                   onTap: () {
@@ -69,7 +63,22 @@ class _ConversationDrawer extends StatelessWidget {
                     Navigator.pop(context);
                   },
                 ),
-              ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Container(
+                    margin: const EdgeInsets.only(left: 12, right: 4, bottom: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(14)),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      _HistoryAction(icon: Icons.vertical_align_top_rounded, label: '置顶', onTap: () => context.read<AppState>().pinConversation(c.id)),
+                      _HistoryAction(icon: Icons.arrow_upward_rounded, label: '上移', onTap: () => context.read<AppState>().moveConversationUp(c.id)),
+                      _HistoryAction(icon: Icons.delete_outline_rounded, label: '删除', danger: true, onTap: () => context.read<AppState>().deleteConversation(c.id)),
+                    ]),
+                  ),
+                  crossFadeState: opened.contains(c.id) ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 180),
+                ),
+              ]),
             );
           },
         )),

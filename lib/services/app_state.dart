@@ -248,30 +248,39 @@ Future<void> runTerminalCommand(String command) async {
 
   Future<void> sendAgentTask(String content) async {
     addUserMessage(content);
-    if (agentMode == AgentMode.mtc) {
-      addAssistantMessage('已记录你的需求。MTC 模式不会执行任何工具调用，我会先把想法整理成设计初版：\n\n$content\n\n如果这个方向没问题，请切换到 **Code** 模式，我会根据这份需求开始实现、调用工具并生成变更。');
-      return;
-    }
     final cfg = activeAiConfig;
-    final prompt = '${AgentSystemPrompt.text}\n当前远程目录：$currentPath\n用户任务：$content';
+    final modeGuide = agentMode == AgentMode.mtc
+        ? '当前是 MTC 方案沟通模式：必须真实回复用户，专注需求澄清、架构方案、UI/UX 设计和风险评估；不要提出或执行工具调用。'
+        : '当前是 Code 编码模式：可提出工具调用和文件变更建议，但写文件、删除文件、执行终端命令必须等待授权。';
+    final prompt = '$modeGuide\n当前远程目录：$currentPath\n用户任务：$content';
     if (cfg.apiKey.isEmpty) {
-      addAssistantMessage(
-        '未配置 API Key。已生成可执行计划模板：\n1. 读取上下文和目录。\n2. 如需修改文件，生成变更卡片等待保存。\n3. 如需终端命令，生成授权卡片等待执行。',
-        toolCalls: [ToolCallRecord(id: const Uuid().v4(), tool: 'list_files', arguments: {'path': currentPath}, status: _autoStatus('list_files'))],
-      );
+      addAssistantMessage('未配置 AI 提供商或 API Key，无法发送真实请求。请进入 AI 设置填写 Endpoint、API Key 与模型 ID。', modelLabel: '${cfg.name} · ${cfg.model}');
       return;
     }
     busy = true;
     notifyListeners();
+    final modelLabel = '${cfg.name} · ${cfg.model}';
     try {
-      final text = await AiClient(cfg).sendChat([
+      final req = [
         {'role': 'system', 'content': AgentSystemPrompt.text},
         {'role': 'user', 'content': prompt},
-      ]);
-      final parsed = _extractThinking(text);
-      addAssistantMessage(parsed.$2, thinking: parsed.$1, modelLabel: '${cfg.name} · ${cfg.model}');
+      ];
+      if (cfg.streamOutput) {
+        final id = addAssistantMessage('', modelLabel: modelLabel);
+        var raw = '';
+        await for (final chunk in AiClient(cfg).streamChat(req)) {
+          raw += chunk;
+          updateAssistantMessage(id, raw, modelLabel: modelLabel);
+        }
+        final parsed = _extractThinking(raw);
+        updateAssistantMessage(id, parsed.$2, thinking: parsed.$1, modelLabel: modelLabel);
+      } else {
+        final text = await AiClient(cfg).sendChat(req);
+        final parsed = _extractThinking(text);
+        addAssistantMessage(parsed.$2, thinking: parsed.$1, modelLabel: modelLabel);
+      }
     } catch (e) {
-      addAssistantMessage('AI 请求失败：\n\n```text\n$e\n```', modelLabel: '${cfg.name} · ${cfg.model}');
+      addAssistantMessage('AI 请求失败：\n\n```text\n$e\n```', modelLabel: modelLabel);
     } finally {
       busy = false;
       notifyListeners();
@@ -379,8 +388,18 @@ Future<void> runTerminalCommand(String command) async {
     _saveConversations();
   }
 
-  void addAssistantMessage(String content, {String? thinking, String? modelLabel, List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {
-    messages.add(AgentMessage(id: const Uuid().v4(), role: 'assistant', content: content, createdAt: DateTime.now(), thinking: thinking, modelLabel: modelLabel, toolCalls: toolCalls, changes: changes));
+  String addAssistantMessage(String content, {String? thinking, String? modelLabel, List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {
+    final id = const Uuid().v4();
+    messages.add(AgentMessage(id: id, role: 'assistant', content: content, createdAt: DateTime.now(), thinking: thinking, modelLabel: modelLabel, toolCalls: toolCalls, changes: changes));
+    notifyListeners();
+    return id;
+  }
+
+  void updateAssistantMessage(String id, String content, {String? thinking, String? modelLabel}) {
+    final index = messages.indexWhere((m) => m.id == id);
+    if (index < 0) return;
+    final msg = messages[index];
+    messages[index] = AgentMessage(id: msg.id, role: msg.role, content: content, createdAt: msg.createdAt, thinking: thinking ?? msg.thinking, modelLabel: modelLabel ?? msg.modelLabel, toolCalls: msg.toolCalls, changes: msg.changes);
     notifyListeners();
   }
 

@@ -34,6 +34,14 @@ enum AiProviderType { openai, gemini, claude, rest }
 
 enum AiApiMode { openAiChat, responses, messages }
 
+extension AiApiModeLabel on AiApiMode {
+  String get label => switch (this) {
+        AiApiMode.openAiChat => 'OpenAI 兼容 /chat/completions',
+        AiApiMode.responses => 'OpenAI Responses /responses',
+        AiApiMode.messages => '自定义 Messages Endpoint',
+      };
+}
+
 enum ToolPermissionMode { askEveryTime, autoReadOnly, autoAll }
 
 const Map<AiProviderType, String> providerEndpoints = {
