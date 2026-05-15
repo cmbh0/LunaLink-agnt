@@ -27,7 +27,6 @@ class MoonTheme {
         primary: MoonColors.accent,
         secondary: MoonColors.purple,
         surface: MoonColors.panel,
-        surface: MoonColors.bg,
         error: MoonColors.danger,
       ),
       scaffoldBackgroundColor: MoonColors.bg,
