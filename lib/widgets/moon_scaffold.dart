@@ -64,7 +64,7 @@ class _SkyPainter extends CustomPainter {
       canvas.drawPath(path, flow);
     }
     final meteor = Paint()
-      ..shader = LinearGradient(colors: [Colors.transparent, MoonColors.moon.withOpacity(.8)]).createShader(Rect.fromLTWH(0, 0, 180, 80))
+      ..shader = LinearGradient(colors: [Colors.transparent, MoonColors.moon.withOpacity(.8)]).createShader(const Rect.fromLTWH(0, 0, 180, 80))
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
     final mx = size.width * (1.15 - t * 1.45);
