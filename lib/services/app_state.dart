@@ -21,7 +21,7 @@ class AppState extends ChangeNotifier {
   GitHubConfig github = const GitHubConfig();
   String? activeServerId;
   bool autoReconnect = true;
-  AgentMode agentMode = AgentMode.npc;
+  AgentMode agentMode = AgentMode.mtc;
   ServerInfo? serverInfo;
   String currentPath = '/';
   List<RemoteFileEntry> files = [];
@@ -210,8 +210,8 @@ Future<void> runTerminalCommand(String command) async {
 
   Future<void> sendAgentTask(String content) async {
     addUserMessage(content);
-    if (agentMode == AgentMode.npc) {
-      addAssistantMessage('已记录你的需求。NPC 模式不会执行任何工具调用，我会先把想法整理成设计初版：\n\n$content\n\n如果这个方向没问题，请切换到 **Code** 模式，我会根据这份需求开始实现、调用工具并生成变更。');
+    if (agentMode == AgentMode.mtc) {
+      addAssistantMessage('已记录你的需求。MTC 模式不会执行任何工具调用，我会先把想法整理成设计初版：\n\n$content\n\n如果这个方向没问题，请切换到 **Code** 模式，我会根据这份需求开始实现、调用工具并生成变更。');
       return;
     }
     final cfg = aiConfigs.first;

@@ -12,7 +12,7 @@ class ConversationMeta {
       );
 }
 
-enum AgentMode { npc, code }
+enum AgentMode { mtc, code }
 
 class GitHubConfig {
   final String token;

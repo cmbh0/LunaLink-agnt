@@ -87,7 +87,7 @@ class _TopBar extends StatelessWidget {
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(color: const Color(0xFFE9E9E9), borderRadius: BorderRadius.circular(32)),
           child: Row(children: [
-            _Segment(text: 'NPC', selected: state.agentMode == AgentMode.npc, onTap: () => context.read<AppState>().setAgentMode(AgentMode.npc)),
+            _Segment(text: 'MTC', selected: state.agentMode == AgentMode.mtc, onTap: () => context.read<AppState>().setAgentMode(AgentMode.mtc)),
             _Segment(text: 'Code', selected: state.agentMode == AgentMode.code, onTap: () => context.read<AppState>().setAgentMode(AgentMode.code)),
           ]),
         ),
