@@ -34,6 +34,13 @@ enum AiProviderType { openai, gemini, claude, rest }
 
 enum ToolPermissionMode { askEveryTime, autoReadOnly, autoAll }
 
+static const Map<AiProviderType, String> providerEndpoints = {
+  AiProviderType.openai: 'https://api.openai.com/v1',
+  AiProviderType.gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  AiProviderType.claude: 'https://api.anthropic.com/v1',
+  AiProviderType.rest: 'https://api.example.com/v1',
+};
+
 class AiServiceConfig {
   final String id;
   final String name;

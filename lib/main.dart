@@ -17,6 +17,16 @@ class LunaLinkApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'LunaLink Agent',
         theme: MoonTheme.dark,
+        onGenerateRoute: (settings) => PageRouteBuilder<void>(
+          settings: settings,
+          transitionDuration: const Duration(milliseconds: 260),
+          reverseTransitionDuration: const Duration(milliseconds: 220),
+          pageBuilder: (_, __, ___) => const HomeShell(),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: Tween(begin: const Offset(0, .025), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)), child: child),
+          ),
+        ),
         home: const HomeShell(),
       ),
     );

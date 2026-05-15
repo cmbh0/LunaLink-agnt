@@ -79,6 +79,41 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteConversation(String id) async {
+    final index = conversations.indexWhere((e) => e.id == id);
+    if (index < 0) return;
+    conversations.removeAt(index);
+    await store.deleteFile('memory', id);
+    if (conversationId == id) {
+      if (conversations.isEmpty) {
+        await newConversation();
+        return;
+      }
+      conversationId = conversations.first.id;
+      messages.clear();
+    }
+    await _saveConversations();
+    notifyListeners();
+  }
+
+  Future<void> pinConversation(String id) async {
+    final index = conversations.indexWhere((e) => e.id == id);
+    if (index <= 0) return;
+    final item = conversations.removeAt(index);
+    conversations.insert(0, item);
+    await _saveConversations();
+    notifyListeners();
+  }
+
+  Future<void> moveConversationUp(String id) async {
+    final index = conversations.indexWhere((e) => e.id == id);
+    if (index <= 0) return;
+    final item = conversations.removeAt(index);
+    conversations.insert(index - 1, item);
+    await _saveConversations();
+    notifyListeners();
+  }
+
   Future<void> switchConversation(String id) async {
     conversationId = id;
     messages.clear();
