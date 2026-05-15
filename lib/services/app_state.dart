@@ -17,6 +17,9 @@ class AppState extends ChangeNotifier {
   final aiConfigs = <AiServiceConfig>[];
   final messages = <AgentMessage>[];
   final terminalLogs = <String>['LunaLink SSH Terminal ready.'];
+  GitHubConfig github = const GitHubConfig();
+  String? activeServerId;
+  bool autoReconnect = true;
   ServerInfo? serverInfo;
   String currentPath = '/';
   List<RemoteFileEntry> files = [];
@@ -36,11 +39,53 @@ class AppState extends ChangeNotifier {
     ));
   }
 
+  Future<void> loadPersistedState() async {
+    final serverDoc = await store.readMap('profiles', 'servers', fallback: {'items': <dynamic>[]});
+    servers
+      ..clear()
+      ..addAll((serverDoc['items'] as List? ?? []).whereType<Map>().map((e) => ServerProfile.fromJson(Map<String, dynamic>.from(e))));
+    final githubDoc = await store.readMap('profiles', 'github', fallback: const {});
+    github = GitHubConfig.fromJson(githubDoc);
+    final aiDoc = await store.readMap('profiles', 'ai_services', fallback: {'items': <dynamic>[]});
+    final aiItems = aiDoc['items'] as List? ?? [];
+    if (aiItems.isNotEmpty) {
+      aiConfigs
+        ..clear()
+        ..addAll(aiItems.whereType<Map>().map((e) => AiServiceConfig.fromJson(Map<String, dynamic>.from(e))));
+    }
+    notifyListeners();
+  }
+
+  Future<void> saveGitHubConfig(GitHubConfig config) async {
+    github = config;
+    await store.writeMap('profiles', 'github', config.toJson());
+    notifyListeners();
+  }
+
+  Future<void> switchServer(String id) async {
+    final profile = servers.firstWhere((e) => e.id == id);
+    await connect(profile);
+  }
+
+  Future<T> _withReconnect<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } catch (_) {
+      if (!autoReconnect || activeServerId == null) rethrow;
+      final matches = servers.where((e) => e.id == activeServerId).toList();
+      if (matches.isEmpty) rethrow;
+      final profile = matches.first;
+      await ssh.connect(profile);
+      return action();
+    }
+  }
+
   Future<void> connect(ServerProfile profile) async {
     busy = true;
     notifyListeners();
     try {
       await ssh.connect(profile);
+      activeServerId = profile.id;
       serverInfo = await ssh.readInfo();
       currentPath = profile.rootPath;
       files = await ssh.listDir(currentPath);

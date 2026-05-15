@@ -6,7 +6,8 @@ import '../services/app_state.dart';
 import '../theme/moon_theme.dart';
 
 class ConnectScreen extends StatefulWidget {
-  const ConnectScreen({super.key});
+  final bool fullPage;
+  const ConnectScreen({super.key, this.fullPage = false});
   @override
   State<ConnectScreen> createState() => _ConnectScreenState();
 }
@@ -21,7 +22,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    return ListView(padding: const EdgeInsets.all(16), children: [
+    return Scaffold(
+      appBar: widget.fullPage ? AppBar(title: const Text('Cloud 服务器')) : null,
+      body: ListView(padding: const EdgeInsets.all(16), children: [
       const Text('连接 Linux 服务器', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
       const SizedBox(height: 12),
       TextField(controller: host, decoration: const InputDecoration(labelText: 'Host / IP')),
@@ -36,14 +39,24 @@ class _ConnectScreenState extends State<ConnectScreen> {
         onPressed: state.busy ? null : () async {
           final profile = ServerProfile(id: const Uuid().v4(), name: host.text, host: host.text.trim(), port: int.tryParse(port.text) ?? 22, username: user.text.trim(), password: pass.text, rootPath: root.text.trim().isEmpty ? '/' : root.text.trim());
           await context.read<AppState>().connect(profile);
-          if (context.mounted) DefaultTabController.of(context).animateTo(1);
+          if (context.mounted && !widget.fullPage) Navigator.maybePop(context);
         },
         icon: state.busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.link_rounded),
         label: const Text('连接并读取服务器信息'),
       ),
       const SizedBox(height: 18),
+      if (state.servers.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        const Text('已保存服务器', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        for (final s in state.servers) Card(child: ListTile(
+          leading: Icon(state.activeServerId == s.id ? Icons.cloud_done_rounded : Icons.cloud_queue_rounded),
+          title: Text(s.name),
+          subtitle: Text('${s.username}@${s.host}:${s.port} · ${s.rootPath}'),
+          trailing: state.activeServerId == s.id ? const Text('当前') : TextButton(onPressed: () => context.read<AppState>().switchServer(s.id), child: const Text('切换')),
+        )),
+      ],
       if (state.serverInfo != null) _InfoCard(info: state.serverInfo!),
-    ]);
+    ]));
   }
 }
 

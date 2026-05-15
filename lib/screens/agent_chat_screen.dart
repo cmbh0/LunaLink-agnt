@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../models/ai_models.dart';
 import '../services/app_state.dart';
 import '../theme/moon_theme.dart';
+import 'connect_screen.dart';
+import 'github_settings_screen.dart';
 
 class AgentChatScreen extends StatefulWidget {
   final bool embedded;
@@ -29,20 +31,12 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Column(children: [
-      const SizedBox(height: 58),
-      const Padding(
-        padding: EdgeInsets.fromLTRB(68, 0, 68, 8),
-        child: Column(children: [
-          Text('LunaLink Agent', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: .2)),
-          SizedBox(height: 2),
-          Text('移动端 AI 开发工作台', style: TextStyle(color: MoonColors.muted, fontSize: 12)),
-        ]),
-      ),
-      if (state.busy) const LinearProgressIndicator(minHeight: 2),
+      _TopBar(onSettings: () => _showAiConfig(context)),
       Expanded(
-        child: state.messages.isEmpty ? const _EmptyChat() : ListView.builder(controller: scroll, padding: const EdgeInsets.fromLTRB(12, 8, 12, 10), itemCount: state.messages.length, itemBuilder: (context, i) => _Bubble(message: state.messages[i])),
+        child: state.messages.isEmpty ? const _HeroEmpty() : ListView.builder(controller: scroll, padding: const EdgeInsets.fromLTRB(24, 12, 24, 10), itemCount: state.messages.length, itemBuilder: (context, i) => _Bubble(message: state.messages[i])),
       ),
       _Composer(controller: input, onSend: _send, onConfig: () => _showAiConfig(context)),
+      const _BottomActions(),
     ]);
   }
 
@@ -70,25 +64,108 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
         SwitchListTile(value: enableThinking, onChanged: (v) => setDialog(() => enableThinking = v), title: const Text('启用思考内容折叠')),
         SwitchListTile(value: stream, onChanged: (v) => setDialog(() => stream = v), title: const Text('默认流式输出')),
       ])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-        FilledButton(onPressed: () async {
-          await state.saveAiConfig(AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim().isEmpty ? cfg.model : model.text.trim(), thinkingModel: thinkingModel.text.trim().isEmpty ? null : thinkingModel.text.trim(), enableThinking: enableThinking, streamOutput: stream, temperature: double.tryParse(temp.text) ?? .2, maxTokens: int.tryParse(maxTokens.text) ?? 4096, permissionMode: state.permissionMode));
-          if (context.mounted) Navigator.pop(context);
-        }, child: const Text('保存')),
-      ],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')), FilledButton(onPressed: () async {
+        await state.saveAiConfig(AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim().isEmpty ? cfg.model : model.text.trim(), thinkingModel: thinkingModel.text.trim().isEmpty ? null : thinkingModel.text.trim(), enableThinking: enableThinking, streamOutput: stream, temperature: double.tryParse(temp.text) ?? .2, maxTokens: int.tryParse(maxTokens.text) ?? 4096, permissionMode: state.permissionMode));
+        if (context.mounted) Navigator.pop(context);
+      }, child: const Text('保存'))],
     )));
   }
 }
 
-class _EmptyChat extends StatelessWidget {
-  const _EmptyChat();
+class _TopBar extends StatelessWidget {
+  final VoidCallback onSettings;
+  const _TopBar({required this.onSettings});
   @override
-  Widget build(BuildContext context) => Center(child: Container(
-    margin: const EdgeInsets.all(24), padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(color: MoonColors.panel.withOpacity(.55), borderRadius: BorderRadius.circular(24), border: Border.all(color: MoonColors.edge)),
-    child: const Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.auto_awesome_rounded, size: 52, color: MoonColors.accent), SizedBox(height: 12), Text('直接描述你想做的开发任务', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), SizedBox(height: 8), Text('文件、终端、工具调用、diff 变更都会在对话内折叠展示。', textAlign: TextAlign.center, style: TextStyle(color: MoonColors.muted))]),
-  ));
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+    child: Row(children: [
+      _CircleButton(icon: Icons.arrow_back_ios_new_rounded, onTap: () {}),
+      const Spacer(),
+      Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(color: const Color(0xFFE9E9E9), borderRadius: BorderRadius.circular(32)),
+        child: Row(children: [
+          _Segment(text: 'MTC', selected: false),
+          _Segment(text: 'Code', selected: true),
+        ]),
+      ),
+      const Spacer(),
+      _CircleButton(icon: Icons.tune_rounded, onTap: onSettings),
+    ]),
+  );
+}
+
+class _Segment extends StatelessWidget {
+  final String text;
+  final bool selected;
+  const _Segment({required this.text, required this.selected});
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 92,
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    decoration: BoxDecoration(color: selected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(28), boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 8)] : null),
+    alignment: Alignment.center,
+    child: Text(text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+  );
+}
+
+class _CircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _CircleButton({required this.icon, required this.onTap});
+  @override
+  Widget build(BuildContext context) => Material(color: Colors.white, shape: const CircleBorder(), child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: SizedBox(width: 54, height: 54, child: Icon(icon))));
+}
+
+class _HeroEmpty extends StatelessWidget {
+  const _HeroEmpty();
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final active = state.activeServerId;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 130, 28, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Hey 👋 用户', style: TextStyle(fontSize: 42, fontWeight: FontWeight.w400, height: 1.15)),
+        const SizedBox(height: 2),
+        const Text('代码开发，从这里开始', style: TextStyle(fontSize: 38, fontWeight: FontWeight.w400, height: 1.15)),
+        const SizedBox(height: 22),
+        if (state.servers.isNotEmpty) Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
+          child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+            value: active,
+            hint: const Text('选择云服务器'),
+            items: state.servers.map((e) => DropdownMenuItem(value: e.id, child: Text('${e.name} · ${e.host}'))).toList(),
+            onChanged: (v) { if (v != null) context.read<AppState>().switchServer(v); },
+          )),
+        ),
+      ]),
+    );
+  }
+}
+
+class _BottomActions extends StatelessWidget {
+  const _BottomActions();
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(34, 0, 34, 14),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+      _NavAction(icon: Icons.cloud_outlined, label: 'Cloud', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectScreen(fullPage: true)))),
+      _NavAction(icon: Icons.hub_outlined, label: '连接 Github', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GitHubSettingsScreen()))),
+      _NavAction(icon: Icons.account_tree_outlined, label: '分支', muted: true, onTap: () {}),
+    ]),
+  );
+}
+
+class _NavAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool muted;
+  final VoidCallback onTap;
+  const _NavAction({required this.icon, required this.label, required this.onTap, this.muted = false});
+  @override
+  Widget build(BuildContext context) => InkWell(onTap: muted ? null : onTap, borderRadius: BorderRadius.circular(16), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), child: Row(children: [Icon(icon, color: muted ? Colors.black26 : Colors.black87), const SizedBox(width: 8), Text(label, style: TextStyle(fontSize: 16, color: muted ? Colors.black26 : Colors.black87, fontWeight: FontWeight.w500))])));
 }
 
 class _Bubble extends StatelessWidget {
@@ -102,11 +179,11 @@ class _Bubble extends StatelessWidget {
       child: Container(
         width: MediaQuery.sizeOf(context).width * .88,
         margin: const EdgeInsets.symmetric(vertical: 7),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: isUser ? MoonColors.accent.withOpacity(.24) : MoonColors.panel.withOpacity(.78), borderRadius: BorderRadius.circular(20), border: Border.all(color: isUser ? MoonColors.accent.withOpacity(.5) : MoonColors.edge)),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: isUser ? MoonColors.accent.withOpacity(.10) : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: MoonColors.edge)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           if (message.thinking?.isNotEmpty == true) _Fold(title: '思考内容', icon: Icons.psychology_rounded, child: Text(message.thinking!, style: const TextStyle(color: MoonColors.muted))),
-          MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.45), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn), codeblockDecoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(12)))),
+          MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.45), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn), codeblockDecoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12)))),
           for (final t in message.toolCalls) _ToolApproval(call: t),
           for (final c in message.changes) _ChangeApproval(change: c),
         ]),
@@ -131,10 +208,10 @@ class _ToolApproval extends StatelessWidget {
   Widget build(BuildContext context) {
     final done = {'done', 'rejected', 'error'}.contains(call.status);
     return _Fold(title: '工具调用：${call.tool} [${call.status}]', icon: Icons.build_circle_rounded, child: Container(
-      width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.warn.withOpacity(.5))),
+      width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.edge)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('参数：${call.arguments}', style: const TextStyle(fontFamily: 'monospace')),
-        if (call.output != null) Container(margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(10)), child: Text(call.output!, maxLines: 10, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace'))),
+        if (call.output != null) Container(margin: const EdgeInsets.only(top: 8), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)), child: Text(call.output!, maxLines: 10, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace'))),
         if (!done) Row(children: [TextButton(onPressed: () => context.read<AppState>().rejectTool(call.id), child: const Text('拒绝')), FilledButton(onPressed: () => context.read<AppState>().executeTool(call.id), child: const Text('授权执行'))]),
       ]),
     ));
@@ -148,7 +225,7 @@ class _ChangeApproval extends StatelessWidget {
   Widget build(BuildContext context) {
     final done = {'saved', 'rejected'}.contains(change.status);
     return _Fold(title: '文件 Diff：${change.path} [${change.status}]', icon: Icons.difference_rounded, child: Container(
-      width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.accent.withOpacity(.45))),
+      width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.edge)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _DiffBlock(oldText: change.oldText, newText: change.newText),
         if (!done) Row(children: [TextButton(onPressed: () => context.read<AppState>().rejectChange(change.id), child: const Text('拒绝')), FilledButton(onPressed: () => context.read<AppState>().applyChange(change.id), child: const Text('保存更改'))]),
@@ -168,8 +245,8 @@ class _DiffBlock extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('新增 ${newLines.length} 行 / 删除 ${oldLines.length} 行', style: const TextStyle(color: MoonColors.muted)),
       const SizedBox(height: 6),
-      ...oldLines.take(8).map((e) => Container(width: double.infinity, color: MoonColors.danger.withOpacity(.12), child: Text('- $e', style: const TextStyle(color: MoonColors.danger, fontFamily: 'monospace')))),
-      ...newLines.take(8).map((e) => Container(width: double.infinity, color: MoonColors.ok.withOpacity(.12), child: Text('+ $e', style: const TextStyle(color: MoonColors.ok, fontFamily: 'monospace')))),
+      ...oldLines.take(8).map((e) => Container(width: double.infinity, color: MoonColors.danger.withOpacity(.10), child: Text('- $e', style: const TextStyle(color: MoonColors.danger, fontFamily: 'monospace')))),
+      ...newLines.take(8).map((e) => Container(width: double.infinity, color: MoonColors.ok.withOpacity(.10), child: Text('+ $e', style: const TextStyle(color: MoonColors.ok, fontFamily: 'monospace')))),
     ]);
   }
 }
@@ -180,13 +257,12 @@ class _Composer extends StatelessWidget {
   final VoidCallback onConfig;
   const _Composer({required this.controller, required this.onSend, required this.onConfig});
   @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.fromLTRB(10, 6, 10, 10), child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), decoration: BoxDecoration(color: MoonColors.panel.withOpacity(.86), borderRadius: BorderRadius.circular(24), border: Border.all(color: MoonColors.edge)),
-    child: Row(children: [
-      IconButton(onPressed: onConfig, icon: const Icon(Icons.tune_rounded)),
-      IconButton(onPressed: () {}, icon: const Icon(Icons.attach_file_rounded)),
-      Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 5, decoration: const InputDecoration(hintText: '描述任务，默认流式输出...', border: InputBorder.none, enabledBorder: InputBorder.none, filled: false))),
-      IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send_rounded)),
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.fromLTRB(28, 6, 28, 4), child: Container(
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(32), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 12)]),
+    child: Column(children: [
+      TextField(controller: controller, minLines: 1, maxLines: 4, decoration: const InputDecoration(hintText: '发消息或按住说话...', border: InputBorder.none, enabledBorder: InputBorder.none, filled: false)),
+      const SizedBox(height: 4),
+      Row(children: [IconButton.filledTonal(onPressed: onConfig, icon: const Icon(Icons.add_rounded)), const Spacer(), IconButton.filledTonal(onPressed: () {}, icon: const Icon(Icons.mic_none_rounded)), const SizedBox(width: 8), IconButton.filled(onPressed: onSend, style: IconButton.styleFrom(backgroundColor: MoonColors.accent), icon: const Icon(Icons.graphic_eq_rounded))]),
     ]),
   ));
 }

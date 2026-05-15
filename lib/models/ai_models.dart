@@ -1,3 +1,19 @@
+class GitHubConfig {
+  final String token;
+  final bool autoApprove;
+
+  const GitHubConfig({this.token = '', this.autoApprove = false});
+
+  bool get isConnected => token.trim().isNotEmpty;
+
+  Map<String, dynamic> toJson() => {'token': token, 'autoApprove': autoApprove};
+
+  factory GitHubConfig.fromJson(Map<String, dynamic> json) => GitHubConfig(
+        token: json['token'] as String? ?? '',
+        autoApprove: json['autoApprove'] as bool? ?? false,
+      );
+}
+
 enum AiProviderType { openai, gemini, claude, rest }
 
 enum ToolPermissionMode { askEveryTime, autoReadOnly, autoAll }

@@ -8,6 +8,7 @@ class MoonScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: appBar,
         floatingActionButton: floatingActionButton,
         body: SafeArea(child: child),
