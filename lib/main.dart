@@ -128,7 +128,7 @@ class _SettingsAboutPanel extends StatelessWidget {
         const Text('设置与关于', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Card(child: ListTile(leading: const Icon(Icons.auto_awesome_rounded), title: const Text('默认流式输出'), subtitle: const Text('AI 回复以流式体验更新，思考与工具调用默认折叠展示。'), trailing: Switch(value: true, onChanged: (_) {}))),
-        Card(child: ListTile(leading: const Icon(Icons.dark_mode_rounded), title: const Text('暗蓝月亮主题'), subtitle: const Text('星空、月光、流星与玻璃面板视觉层级。'), trailing: Switch(value: true, onChanged: (_) {}))),
+        Card(child: ListTile(leading: const Icon(Icons.palette_outlined), title: const Text('默认主题'), subtitle: const Text('使用 Flutter Material 默认主题效果，去除月亮星空特效。'), trailing: Switch(value: true, onChanged: (_) {}))),
         const SizedBox(height: 8),
         const Card(
           child: Padding(
