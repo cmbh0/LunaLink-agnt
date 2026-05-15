@@ -16,6 +16,8 @@ android/local.properties
 # Operit workspace metadata
 .operit/
 .backup/
+actions_logs*/
+actions_logs*.zip
 
 # IDE / OS
 .idea/
