@@ -365,17 +365,3 @@ class _GitHubMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Icon(Icons.hub_outlined, size: size);
 }
-
-class _GitHubPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = Colors.black87;
-    canvas.drawCircle(size.center(Offset.zero), size.width * .48, p);
-    canvas.drawCircle(Offset(size.width * .28, size.height * .18), size.width * .14, p);
-    canvas.drawCircle(Offset(size.width * .72, size.height * .18), size.width * .14, p);
-    final cut = Paint()..color = Colors.white;
-    canvas.drawOval(Rect.fromLTWH(size.width * .28, size.height * .36, size.width * .44, size.height * .30), cut);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

@@ -76,28 +76,6 @@ class AiClient {
     if (raw is List) return raw.map((e) => e is Map ? e['id']?.toString() : e.toString()).whereType<String>().where((e) => e.isNotEmpty).toList();
     return const [];
   }
-
-  Future<String> _gemini(List<Map<String, String>> messages) async {
-    final text = messages.map((m) => '${m['role']}: ${m['content']}').join('\n');
-    final model = config.enableThinking && (config.thinkingModel?.isNotEmpty ?? false) ? config.thinkingModel! : config.model;
-    final base = config.endpoint.isEmpty ? 'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent' : config.endpoint;
-    final uri = Uri.parse(base).replace(queryParameters: {'key': config.apiKey});
-    final res = await http.post(uri, headers: {'Content-Type': 'application/json', ...config.headers}, body: jsonEncode({'contents': [{'parts': [{'text': text}]}], 'generationConfig': {'temperature': config.temperature, 'maxOutputTokens': config.maxTokens}}));
-    _ensureOk(res);
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String? ?? res.body;
-  }
-
-  Future<String> _claude(List<Map<String, String>> messages) async {
-    final uri = Uri.parse(config.endpoint.isEmpty ? 'https://api.anthropic.com/v1/messages' : config.endpoint);
-    final system = messages.where((m) => m['role'] == 'system').map((m) => m['content']).join('\n');
-    final msgs = messages.where((m) => m['role'] != 'system').map((m) => {'role': m['role'] == 'assistant' ? 'assistant' : 'user', 'content': m['content']}).toList();
-    final res = await http.post(uri, headers: {'Content-Type': 'application/json', 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01', ...config.headers}, body: jsonEncode({'model': config.enableThinking && (config.thinkingModel?.isNotEmpty ?? false) ? config.thinkingModel : config.model, 'max_tokens': config.maxTokens, 'temperature': config.temperature, 'system': system, 'messages': msgs}));
-    _ensureOk(res);
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return data['content']?[0]?['text'] as String? ?? res.body;
-  }
-
   Map<String, String> _headers() => {'Content-Type': 'application/json', if (config.apiKey.isNotEmpty) 'Authorization': 'Bearer ${config.apiKey}', ...config.headers};
   void _ensureOk(http.Response res) { if (res.statusCode < 200 || res.statusCode >= 300) throw StateError('AI HTTP ${res.statusCode}: ${res.body}'); }
 }
