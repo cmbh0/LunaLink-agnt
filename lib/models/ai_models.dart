@@ -9,6 +9,11 @@ class AiServiceConfig {
   final String endpoint;
   final String apiKey;
   final String model;
+  final String? thinkingModel;
+  final bool enableThinking;
+  final bool streamOutput;
+  final double temperature;
+  final int maxTokens;
   final Map<String, String> headers;
   final ToolPermissionMode permissionMode;
 
@@ -19,6 +24,11 @@ class AiServiceConfig {
     required this.endpoint,
     required this.apiKey,
     required this.model,
+    this.thinkingModel,
+    this.enableThinking = true,
+    this.streamOutput = true,
+    this.temperature = .2,
+    this.maxTokens = 4096,
     this.headers = const {},
     this.permissionMode = ToolPermissionMode.askEveryTime,
   });
@@ -30,6 +40,11 @@ class AiServiceConfig {
         'endpoint': endpoint,
         'apiKey': apiKey,
         'model': model,
+        'thinkingModel': thinkingModel,
+        'enableThinking': enableThinking,
+        'streamOutput': streamOutput,
+        'temperature': temperature,
+        'maxTokens': maxTokens,
         'headers': headers,
         'permissionMode': permissionMode.name,
       };
@@ -37,18 +52,17 @@ class AiServiceConfig {
   factory AiServiceConfig.fromJson(Map<String, dynamic> json) => AiServiceConfig(
         id: json['id'] as String,
         name: json['name'] as String,
-        provider: AiProviderType.values.firstWhere(
-          (e) => e.name == json['provider'],
-          orElse: () => AiProviderType.openai,
-        ),
+        provider: AiProviderType.values.firstWhere((e) => e.name == json['provider'], orElse: () => AiProviderType.openai),
         endpoint: json['endpoint'] as String,
         apiKey: json['apiKey'] as String? ?? '',
         model: json['model'] as String,
+        thinkingModel: json['thinkingModel'] as String?,
+        enableThinking: json['enableThinking'] as bool? ?? true,
+        streamOutput: json['streamOutput'] as bool? ?? true,
+        temperature: (json['temperature'] as num?)?.toDouble() ?? .2,
+        maxTokens: json['maxTokens'] as int? ?? 4096,
         headers: Map<String, String>.from(json['headers'] as Map? ?? {}),
-        permissionMode: ToolPermissionMode.values.firstWhere(
-          (e) => e.name == json['permissionMode'],
-          orElse: () => ToolPermissionMode.askEveryTime,
-        ),
+        permissionMode: ToolPermissionMode.values.firstWhere((e) => e.name == json['permissionMode'], orElse: () => ToolPermissionMode.askEveryTime),
       );
 }
 
@@ -57,6 +71,7 @@ class AgentMessage {
   final String role;
   final String content;
   final DateTime createdAt;
+  final String? thinking;
   final List<ToolCallRecord> toolCalls;
   final List<FileChangeRecord> changes;
 
@@ -65,6 +80,7 @@ class AgentMessage {
     required this.role,
     required this.content,
     required this.createdAt,
+    this.thinking,
     this.toolCalls = const [],
     this.changes = const [],
   });

@@ -16,6 +16,7 @@ class AppState extends ChangeNotifier {
   final servers = <ServerProfile>[];
   final aiConfigs = <AiServiceConfig>[];
   final messages = <AgentMessage>[];
+  final terminalLogs = <String>['LunaLink SSH Terminal ready.'];
   ServerInfo? serverInfo;
   String currentPath = '/';
   List<RemoteFileEntry> files = [];
@@ -31,6 +32,7 @@ class AppState extends ChangeNotifier {
       endpoint: 'https://api.openai.com/v1',
       apiKey: '',
       model: 'gpt-4.1',
+      thinkingModel: 'o3-mini',
     ));
   }
 
@@ -91,6 +93,39 @@ class AppState extends ChangeNotifier {
     await out.writeAsBytes(await ssh.readFile(entry.path));
     return out;
   }
+Future<void> runTerminalCommand(String command) async {
+    terminalLogs.add('\$ $command');
+    notifyListeners();
+    final id = const Uuid().v4();
+    addAssistantMessage('执行终端命令：`$command`', toolCalls: [ToolCallRecord(id: id, tool: 'ssh_exec', arguments: {'command': command}, status: 'running')]);
+    await executeTool(id);
+  }
+
+  void clearTerminalLogs() {
+    terminalLogs.clear();
+    terminalLogs.add('LunaLink SSH Terminal ready.');
+    notifyListeners();
+  }
+
+
+  Future<void> deleteRemote(RemoteFileEntry entry) async {
+    await ssh.delete(entry.path, directory: entry.isDirectory);
+    await refreshFiles();
+  }
+
+  Future<void> duplicateRemote(RemoteFileEntry entry, String newName) async {
+    if (entry.isDirectory) throw StateError('暂不支持直接复制目录，请使用终端 cp -r。');
+    final bytes = await ssh.readFile(entry.path);
+    await ssh.writeFile(_joinRemote(_parentRemote(entry.path), newName), bytes);
+    await refreshFiles();
+  }
+
+  Future<void> chmodRemote(RemoteFileEntry entry, String mode) async {
+    await ssh.exec('chmod $mode ${_shellQuote(entry.path)}');
+    await refreshFiles();
+  }
+
+  String _shellQuote(String s) => "'${s.replaceAll("'", "'\\''")}'";
 
   void setPermissionMode(ToolPermissionMode mode) {
     permissionMode = mode;
@@ -115,7 +150,8 @@ class AppState extends ChangeNotifier {
         {'role': 'system', 'content': AgentSystemPrompt.text},
         {'role': 'user', 'content': prompt},
       ]);
-      addAssistantMessage(text);
+      final parsed = _extractThinking(text);
+      addAssistantMessage(parsed.$2, thinking: parsed.$1);
     } catch (e) {
       addAssistantMessage('AI 请求失败：$e');
     } finally {
@@ -133,6 +169,7 @@ class AppState extends ChangeNotifier {
       switch (call.tool) {
         case 'ssh_exec':
           output = await ssh.exec(call.arguments['command'] as String? ?? '');
+          terminalLogs.add(output.trim().isEmpty ? '[no output]' : output);
           break;
         case 'list_files':
           final path = call.arguments['path'] as String? ?? currentPath;
@@ -155,6 +192,7 @@ class AppState extends ChangeNotifier {
       await journal.append(conversationId: conversationId, event: {'type': 'tool', 'tool': call.tool, 'args': call.arguments, 'output': output});
     } catch (e) {
       _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'error', output: '$e'));
+      if (call.tool == 'ssh_exec') terminalLogs.add('ERROR: $e');
     }
   }
 
@@ -198,8 +236,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addAssistantMessage(String content, {List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {
-    messages.add(AgentMessage(id: const Uuid().v4(), role: 'assistant', content: content, createdAt: DateTime.now(), toolCalls: toolCalls, changes: changes));
+  void addAssistantMessage(String content, {String? thinking, List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {
+    messages.add(AgentMessage(id: const Uuid().v4(), role: 'assistant', content: content, createdAt: DateTime.now(), thinking: thinking, toolCalls: toolCalls, changes: changes));
     notifyListeners();
   }
 
@@ -232,7 +270,7 @@ class AppState extends ChangeNotifier {
     if (found == null) return;
     final msg = messages[found.$1];
     final tools = msg.toolCalls.map((e) => e.id == id ? next : e).toList();
-    messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, toolCalls: tools, changes: msg.changes);
+      messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, toolCalls: tools, changes: msg.changes);
     notifyListeners();
   }
 
@@ -241,8 +279,17 @@ class AppState extends ChangeNotifier {
     if (found == null) return;
     final msg = messages[found.$1];
     final changes = msg.changes.map((e) => e.id == id ? next : e).toList();
-    messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, toolCalls: msg.toolCalls, changes: changes);
+    messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, toolCalls: msg.toolCalls, changes: changes);
     notifyListeners();
+  }
+
+  (String?, String) _extractThinking(String raw) {
+    final reg = RegExp(r'<thinking>([\s\S]*?)</thinking>', caseSensitive: false);
+    final match = reg.firstMatch(raw);
+    if (match == null) return (null, raw);
+    final thinking = match.group(1)?.trim();
+    final content = raw.replaceFirst(reg, '').trim();
+    return (thinking, content.isEmpty ? raw : content);
   }
 
   String _joinRemote(String base, String child) => base.endsWith('/') ? '$base$child' : '$base/$child';

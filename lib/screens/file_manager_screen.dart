@@ -8,7 +8,8 @@ import '../theme/moon_theme.dart';
 import 'file_viewer_screen.dart';
 
 class FileManagerScreen extends StatelessWidget {
-  const FileManagerScreen({super.key});
+  final bool compact;
+  const FileManagerScreen({super.key, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -23,9 +24,10 @@ class FileManagerScreen extends StatelessWidget {
           PopupMenuButton<String>(
             onSelected: (v) => _handleTopAction(context, v),
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'new_file', child: Text('新建文件')),
+const PopupMenuItem(value: 'new_file', child: Text('新建文件')),
               PopupMenuItem(value: 'new_dir', child: Text('新建文件夹')),
               PopupMenuItem(value: 'upload', child: Text('上传本地文件')),
+              PopupMenuItem(value: 'terminal', child: Text('在此处打开终端')),
               PopupMenuItem(value: 'ftp', child: Text('自动创建 FTP(vsftpd)')),
             ],
           ),
@@ -45,6 +47,10 @@ class FileManagerScreen extends StatelessWidget {
 
   Future<void> _handleTopAction(BuildContext context, String action) async {
     final state = context.read<AppState>();
+    if (action == 'terminal') {
+      await state.runTerminalCommand('cd ${state.currentPath} && pwd && ls -la');
+      return;
+    }
     if (action == 'ftp') {
       final out = await state.ssh.installVsftpd();
       if (context.mounted) showDialog(context: context, builder: (_) => AlertDialog(title: const Text('FTP 创建结果'), content: SingleChildScrollView(child: Text(out))));
@@ -85,7 +91,9 @@ class _FileTile extends StatelessWidget {
       trailing: PopupMenuButton<String>(
         onSelected: (v) => _handleEntryAction(context, v),
         itemBuilder: (_) => const [
-          PopupMenuItem(value: 'rename', child: Text('重命名')),
+const PopupMenuItem(value: 'rename', child: Text('重命名')),
+          PopupMenuItem(value: 'duplicate', child: Text('复制')),
+          PopupMenuItem(value: 'chmod', child: Text('权限 chmod')),
           PopupMenuItem(value: 'download', child: Text('下载到应用目录')),
           PopupMenuItem(value: 'delete', child: Text('删除')),
         ],
@@ -98,6 +106,12 @@ class _FileTile extends StatelessWidget {
     if (action == 'rename') {
       final name = await _askName(context, '重命名', initial: entry.name);
       if (name != null && name.trim().isNotEmpty) await state.renameRemote(entry, name.trim());
+    } else if (action == 'duplicate') {
+      final name = await _askName(context, '复制为', initial: '${entry.name}.copy');
+      if (name != null && name.trim().isNotEmpty) await state.duplicateRemote(entry, name.trim());
+    } else if (action == 'chmod') {
+      final mode = await _askName(context, '权限 chmod', initial: '755');
+      if (mode != null && mode.trim().isNotEmpty) await state.chmodRemote(entry, mode.trim());
     } else if (action == 'download') {
       final dir = await getApplicationDocumentsDirectory();
       final file = await state.downloadRemoteFile(entry, dir);
@@ -105,8 +119,7 @@ class _FileTile extends StatelessWidget {
     } else if (action == 'delete') {
       final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('确认删除'), content: Text(entry.path), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除'))]));
       if (ok == true) {
-        await state.ssh.delete(entry.path, directory: entry.isDirectory);
-        await state.refreshFiles();
+        await state.deleteRemote(entry);
       }
     }
   }

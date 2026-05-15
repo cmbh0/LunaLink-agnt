@@ -18,9 +18,18 @@ class AiClient {
     }
   }
 
+  Stream<String> streamChat(List<Map<String, String>> messages) async* {
+    final text = await sendChat(messages);
+    final step = text.length < 64 ? text.length : 24;
+    for (var i = 0; i < text.length; i += step) {
+      await Future<void>.delayed(const Duration(milliseconds: 24));
+      yield text.substring(i, i + step > text.length ? text.length : i + step);
+    }
+  }
+
   Future<String> _openAiCompatible(List<Map<String, String>> messages) async {
     final uri = Uri.parse(config.endpoint.endsWith('/chat/completions') ? config.endpoint : '${config.endpoint}/chat/completions');
-    final res = await http.post(uri, headers: _headers(), body: jsonEncode({'model': config.model, 'messages': messages, 'temperature': 0.2}));
+    final res = await http.post(uri, headers: _headers(), body: jsonEncode({'model': config.enableThinking && (config.thinkingModel?.isNotEmpty ?? false) ? config.thinkingModel : config.model, 'messages': messages, 'temperature': config.temperature, 'max_tokens': config.maxTokens}));
     _ensureOk(res);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return data['choices']?[0]?['message']?['content'] as String? ?? res.body;
@@ -28,9 +37,10 @@ class AiClient {
 
   Future<String> _gemini(List<Map<String, String>> messages) async {
     final text = messages.map((m) => '${m['role']}: ${m['content']}').join('\n');
-    final base = config.endpoint.isEmpty ? 'https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent' : config.endpoint;
+    final model = config.enableThinking && (config.thinkingModel?.isNotEmpty ?? false) ? config.thinkingModel! : config.model;
+    final base = config.endpoint.isEmpty ? 'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent' : config.endpoint;
     final uri = Uri.parse(base).replace(queryParameters: {'key': config.apiKey});
-    final res = await http.post(uri, headers: {'Content-Type': 'application/json', ...config.headers}, body: jsonEncode({'contents': [{'parts': [{'text': text}]}]}));
+    final res = await http.post(uri, headers: {'Content-Type': 'application/json', ...config.headers}, body: jsonEncode({'contents': [{'parts': [{'text': text}]}], 'generationConfig': {'temperature': config.temperature, 'maxOutputTokens': config.maxTokens}}));
     _ensureOk(res);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String? ?? res.body;
@@ -40,7 +50,7 @@ class AiClient {
     final uri = Uri.parse(config.endpoint.isEmpty ? 'https://api.anthropic.com/v1/messages' : config.endpoint);
     final system = messages.where((m) => m['role'] == 'system').map((m) => m['content']).join('\n');
     final msgs = messages.where((m) => m['role'] != 'system').map((m) => {'role': m['role'] == 'assistant' ? 'assistant' : 'user', 'content': m['content']}).toList();
-    final res = await http.post(uri, headers: {'Content-Type': 'application/json', 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01', ...config.headers}, body: jsonEncode({'model': config.model, 'max_tokens': 4096, 'system': system, 'messages': msgs}));
+    final res = await http.post(uri, headers: {'Content-Type': 'application/json', 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01', ...config.headers}, body: jsonEncode({'model': config.enableThinking && (config.thinkingModel?.isNotEmpty ?? false) ? config.thinkingModel : config.model, 'max_tokens': config.maxTokens, 'temperature': config.temperature, 'system': system, 'messages': msgs}));
     _ensureOk(res);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return data['content']?[0]?['text'] as String? ?? res.body;
@@ -53,6 +63,7 @@ class AiClient {
 class AgentSystemPrompt {
   static const text = '''
 你是 LunaLink Agent，工作方式对齐 Trae/Codex CLI。
+默认使用流式输出体验，必要时把思考摘要写入 <thinking>...</thinking>，正文使用 Markdown。
 你可以提出工具调用，但写文件、删除文件、执行终端命令必须等待用户授权。
 你必须返回清晰的计划、风险、diff 摘要和可回滚记录。
 可用工具语义参考：read_file/list_files/apply_file/delete_file/make_directory/grep_code/grep_context/ssh_exec/sftp_read/sftp_write。
