@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import '../models/ai_models.dart';
@@ -44,7 +45,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
                   controller: scroll,
                   padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
                   itemCount: state.messages.length,
-                  itemBuilder: (context, i) => _Bubble(message: state.messages[i]),
+                  itemBuilder: (context, i) => _Bubble(message: state.messages[i], onRollback: (text) => input.text = text),
                 ),
         ),
       ),
@@ -54,7 +55,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
 
   Future<void> _showAiConfig(BuildContext context) async {
     final state = context.read<AppState>();
-    final cfg = state.aiConfigs.first;
+    final cfg = state.activeAiConfig;
     var provider = cfg.provider;
     var apiMode = cfg.apiMode;
     var enableThinking = cfg.enableThinking;
@@ -65,6 +66,9 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     final key = TextEditingController(text: cfg.apiKey);
     final temp = TextEditingController(text: cfg.temperature.toString());
     final maxTokens = TextEditingController(text: cfg.maxTokens.toString());
+    final models = TextEditingController(text: cfg.enabledModels.isNotEmpty ? cfg.enabledModels.join(',') : cfg.model);
+    final summaryThreshold = TextEditingController(text: cfg.summaryThreshold.toString());
+    final dailySummary = TextEditingController(text: cfg.dailySummaryMessages.toString());
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -84,19 +88,25 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
           DropdownButtonFormField<AiApiMode>(
             value: apiMode,
             onChanged: (v) => setDialog(() => apiMode = v!),
-            items: const [DropdownMenuItem(value: AiApiMode.messages, child: Text('Messages / Chat Completions')), DropdownMenuItem(value: AiApiMode.responses, child: Text('Responses'))],
+            items: const [DropdownMenuItem(value: AiApiMode.openAiChat, child: Text('OpenAI 通用聊天')), DropdownMenuItem(value: AiApiMode.responses, child: Text('Responses / RESP')), DropdownMenuItem(value: AiApiMode.messages, child: Text('其他 Messages'))],
             decoration: const InputDecoration(labelText: '接口模式'),
           ),
-          const SizedBox(height: 8), TextField(controller: endpoint, decoration: const InputDecoration(labelText: '接口地址 Endpoint')),
-          const SizedBox(height: 8), TextField(controller: model, decoration: const InputDecoration(labelText: '对话模型')),
-          const SizedBox(height: 8), TextField(controller: thinkingModel, decoration: const InputDecoration(labelText: '思考模型 / Reasoning Model')),
-          const SizedBox(height: 8), TextField(controller: key, decoration: const InputDecoration(labelText: 'API Key'), obscureText: true),
-          const SizedBox(height: 8), Row(children: [Expanded(child: TextField(controller: temp, decoration: const InputDecoration(labelText: 'Temperature'))), const SizedBox(width: 8), Expanded(child: TextField(controller: maxTokens, decoration: const InputDecoration(labelText: 'Max Tokens')))]),
+          const SizedBox(height: 8), TextField(controller: endpoint, decoration: _fieldDecoration('接口地址 Endpoint')),
+          const SizedBox(height: 8), TextField(controller: model, decoration: _fieldDecoration('当前模型 ID')),
+          const SizedBox(height: 8), TextField(controller: models, decoration: _fieldDecoration('可快捷切换模型，英文逗号分隔')),
+          Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () async {
+            final testCfg = AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim(), apiMode: apiMode);
+            try { final list = await state.fetchModelsFor(testCfg); models.text = list.join(','); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('获取到 ${list.length} 个模型'))); } catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('模型列表获取失败：$e'))); }
+          }, icon: const Icon(Icons.cloud_sync_rounded), label: const Text('测试并从 API 获取模型列表'))),
+          const SizedBox(height: 8), TextField(controller: thinkingModel, decoration: _fieldDecoration('思考模型 / Reasoning Model')),
+          const SizedBox(height: 8), TextField(controller: key, decoration: _fieldDecoration('API Key'), obscureText: true),
+          const SizedBox(height: 8), Row(children: [Expanded(child: TextField(controller: temp, decoration: _fieldDecoration('Temperature'))), const SizedBox(width: 8), Expanded(child: TextField(controller: maxTokens, decoration: _fieldDecoration('Max Tokens')))]),
+          const SizedBox(height: 8), Row(children: [Expanded(child: TextField(controller: summaryThreshold, decoration: _fieldDecoration('上下文压缩阈值'))), const SizedBox(width: 8), Expanded(child: TextField(controller: dailySummary, decoration: _fieldDecoration('每日汇总条数')))]),
           SwitchListTile(contentPadding: EdgeInsets.zero, value: enableThinking, onChanged: (v) => setDialog(() => enableThinking = v), title: const Text('启用思考内容折叠')),
           SwitchListTile(contentPadding: EdgeInsets.zero, value: stream, onChanged: (v) => setDialog(() => stream = v), title: const Text('默认流式输出')),
           const SizedBox(height: 8),
           Row(children: [Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('取消'))), const SizedBox(width: 10), Expanded(child: FilledButton(onPressed: () async {
-            await state.saveAiConfig(AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim().isEmpty ? cfg.model : model.text.trim(), thinkingModel: thinkingModel.text.trim().isEmpty ? null : thinkingModel.text.trim(), enableThinking: enableThinking, streamOutput: stream, temperature: double.tryParse(temp.text) ?? .2, maxTokens: int.tryParse(maxTokens.text) ?? 4096, apiMode: apiMode, permissionMode: state.permissionMode));
+            await state.saveAiConfig(AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim().isEmpty ? cfg.model : model.text.trim(), availableModels: models.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(), enabledModels: models.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(), summaryThreshold: int.tryParse(summaryThreshold.text) ?? 30, dailySummaryMessages: int.tryParse(dailySummary.text) ?? 80, thinkingModel: thinkingModel.text.trim().isEmpty ? null : thinkingModel.text.trim(), enableThinking: enableThinking, streamOutput: stream, temperature: double.tryParse(temp.text) ?? .2, maxTokens: int.tryParse(maxTokens.text) ?? 4096, apiMode: apiMode, permissionMode: state.permissionMode));
             if (context.mounted) Navigator.pop(context);
           }, child: const Text('保存')))]),
         ])),
@@ -104,6 +114,8 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     );
   }
 }
+
+InputDecoration _fieldDecoration(String label) => InputDecoration(labelText: label, filled: true, fillColor: const Color(0xFFF7F7F7), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE0E0E0))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE0E0E0))));
 
 class _TopBar extends StatelessWidget {
   final VoidCallback onSettings;
@@ -186,11 +198,14 @@ class _HeroEmpty extends StatelessWidget {
 
 class _Bubble extends StatelessWidget {
   final AgentMessage message;
-  const _Bubble({required this.message});
+  final ValueChanged<String>? onRollback;
+  const _Bubble({required this.message, this.onRollback});
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
-    return Align(
+    return GestureDetector(
+      onLongPress: () => _showMessageActions(context, message, onRollback),
+      child: Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .72),
@@ -199,6 +214,7 @@ class _Bubble extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
           decoration: BoxDecoration(color: isUser ? MoonColors.accent.withOpacity(.11) : Colors.white, borderRadius: BorderRadius.circular(18)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (!isUser && message.modelLabel?.isNotEmpty == true) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(message.modelLabel!, style: const TextStyle(fontSize: 11, color: MoonColors.muted))),
             if (message.thinking?.isNotEmpty == true) _Fold(title: '思考内容', icon: Icons.psychology_rounded, child: Text(message.thinking!, style: const TextStyle(color: MoonColors.muted))),
             MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.42), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn), codeblockDecoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12)))),
             for (final t in message.toolCalls) _ToolApproval(call: t),
@@ -206,8 +222,21 @@ class _Bubble extends StatelessWidget {
           ]),
         ),
       ),
+      ),
     );
   }
+}
+
+Future<void> _showMessageActions(BuildContext context, AgentMessage message, ValueChanged<String>? onRollback) async {
+  final state = context.read<AppState>();
+  final isUser = message.role == 'user';
+  await showModalBottomSheet<void>(context: context, builder: (_) => SafeArea(child: Wrap(children: [
+    ListTile(leading: const Icon(Icons.delete_outline_rounded), title: const Text('删除'), onTap: () { state.deleteMessage(message.id); Navigator.pop(context); }),
+    ListTile(leading: const Icon(Icons.copy_rounded), title: const Text('复制'), onTap: () { Clipboard.setData(ClipboardData(text: message.content)); Navigator.pop(context); }),
+    if (!isUser) ListTile(leading: const Icon(Icons.refresh_rounded), title: const Text('重新生成'), onTap: () { Navigator.pop(context); state.regenerateAfter(message.id); }),
+    if (isUser) ListTile(leading: const Icon(Icons.edit_rounded), title: const Text('编辑并重发'), onTap: () { onRollback?.call(message.content); state.deleteMessage(message.id); Navigator.pop(context); }),
+    if (isUser) ListTile(leading: const Icon(Icons.history_rounded), title: const Text('回滚到这里'), onTap: () { final text = state.rollbackToMessage(message.id); if (text != null) onRollback?.call(text); Navigator.pop(context); }),
+  ])));
 }
 
 class _Fold extends StatelessWidget {
@@ -287,6 +316,8 @@ class _Composer extends StatelessWidget {
           decoration: const InputDecoration(hintText: '发消息...', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4)),
         ),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          _ModelSwitcher(),
+          const SizedBox(width: 10),
           _MiniAction(icon: const Icon(Icons.cloud_outlined, size: 16), label: 'Cloud', onTap: () => Navigator.push(context, _softRoute(const ConnectScreen(fullPage: true)))),
           const SizedBox(width: 10),
           _MiniAction.custom(icon: const _GitHubMark(size: 15), label: 'GitHub', onTap: () => Navigator.push(context, _softRoute(const GitHubSettingsScreen()))),
@@ -305,6 +336,19 @@ PageRouteBuilder<void> _softRoute(Widget page) => PageRouteBuilder<void>(
   transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: SlideTransition(position: Tween(begin: const Offset(0, .03), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)), child: child)),
 );
 
+class _ModelSwitcher extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final cfg = state.activeAiConfig;
+    return PopupMenuButton<String>(
+      onSelected: (id) => context.read<AppState>().setActiveAiConfig(id),
+      itemBuilder: (_) => state.aiConfigs.expand((c) => (c.enabledModels.isEmpty ? [c.model] : c.enabledModels).map((m) => PopupMenuItem(value: c.id, child: Text('${c.name} · $m')))).toList(),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.smart_toy_outlined, size: 15), const SizedBox(width: 4), Text(cfg.model, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]),
+    );
+  }
+}
+
 class _MiniAction extends StatelessWidget {
   final Widget icon;
   final String label;
@@ -319,7 +363,7 @@ class _GitHubMark extends StatelessWidget {
   final double size;
   const _GitHubMark({required this.size});
   @override
-  Widget build(BuildContext context) => CustomPaint(size: Size.square(size), painter: _GitHubPainter());
+  Widget build(BuildContext context) => Icon(Icons.hub_outlined, size: size);
 }
 
 class _GitHubPainter extends CustomPainter {

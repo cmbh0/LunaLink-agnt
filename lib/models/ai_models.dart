@@ -32,7 +32,7 @@ class GitHubConfig {
 
 enum AiProviderType { openai, gemini, claude, rest }
 
-enum AiApiMode { messages, responses }
+enum AiApiMode { openAiChat, responses, messages }
 
 enum ToolPermissionMode { askEveryTime, autoReadOnly, autoAll }
 
@@ -50,6 +50,10 @@ class AiServiceConfig {
   final String endpoint;
   final String apiKey;
   final String model;
+  final List<String> availableModels;
+  final List<String> enabledModels;
+  final int summaryThreshold;
+  final int dailySummaryMessages;
   final String? thinkingModel;
   final bool enableThinking;
   final bool streamOutput;
@@ -66,6 +70,10 @@ class AiServiceConfig {
     required this.endpoint,
     required this.apiKey,
     required this.model,
+    this.availableModels = const [],
+    this.enabledModels = const [],
+    this.summaryThreshold = 30,
+    this.dailySummaryMessages = 80,
     this.thinkingModel,
     this.enableThinking = true,
     this.streamOutput = true,
@@ -83,6 +91,10 @@ class AiServiceConfig {
         'endpoint': endpoint,
         'apiKey': apiKey,
         'model': model,
+        'availableModels': availableModels,
+        'enabledModels': enabledModels,
+        'summaryThreshold': summaryThreshold,
+        'dailySummaryMessages': dailySummaryMessages,
         'thinkingModel': thinkingModel,
         'enableThinking': enableThinking,
         'streamOutput': streamOutput,
@@ -100,6 +112,10 @@ class AiServiceConfig {
         endpoint: json['endpoint'] as String,
         apiKey: json['apiKey'] as String? ?? '',
         model: json['model'] as String,
+        availableModels: (json['availableModels'] as List? ?? const []).map((e) => e.toString()).toList(),
+        enabledModels: (json['enabledModels'] as List? ?? const []).map((e) => e.toString()).toList(),
+        summaryThreshold: json['summaryThreshold'] as int? ?? 30,
+        dailySummaryMessages: json['dailySummaryMessages'] as int? ?? 80,
         thinkingModel: json['thinkingModel'] as String?,
         enableThinking: json['enableThinking'] as bool? ?? true,
         streamOutput: json['streamOutput'] as bool? ?? true,
@@ -117,6 +133,7 @@ class AgentMessage {
   final String content;
   final DateTime createdAt;
   final String? thinking;
+  final String? modelLabel;
   final List<ToolCallRecord> toolCalls;
   final List<FileChangeRecord> changes;
 
@@ -126,6 +143,7 @@ class AgentMessage {
     required this.content,
     required this.createdAt,
     this.thinking,
+    this.modelLabel,
     this.toolCalls = const [],
     this.changes = const [],
   });

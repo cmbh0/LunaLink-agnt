@@ -7,14 +7,13 @@ class AiClient {
   AiClient(this.config);
 
   Future<String> sendChat(List<Map<String, String>> messages) async {
-    switch (config.provider) {
-      case AiProviderType.openai:
-      case AiProviderType.rest:
-        return config.apiMode == AiApiMode.responses ? _openAiResponses(messages) : _openAiCompatible(messages);
-      case AiProviderType.gemini:
-        return _gemini(messages);
-      case AiProviderType.claude:
-        return _claude(messages);
+    switch (config.apiMode) {
+      case AiApiMode.openAiChat:
+        return _openAiCompatible(messages);
+      case AiApiMode.responses:
+        return _openAiResponses(messages);
+      case AiApiMode.messages:
+        return _genericMessages(messages);
     }
   }
 
@@ -57,6 +56,25 @@ class AiClient {
       if (parts.isNotEmpty) return parts.join('\n');
     }
     return res.body;
+  }
+
+  Future<String> _genericMessages(List<Map<String, String>> messages) async {
+    final uri = Uri.parse(config.endpoint);
+    final res = await http.post(uri, headers: _headers(), body: jsonEncode({'model': config.model, 'messages': messages, 'temperature': config.temperature, 'max_tokens': config.maxTokens}));
+    _ensureOk(res);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data['choices']?[0]?['message']?['content'] as String? ?? data['message'] as String? ?? data['text'] as String? ?? res.body;
+  }
+
+  Future<List<String>> fetchModels() async {
+    final base = config.endpoint.replaceAll(RegExp(r'/(chat/completions|responses)\$'), '');
+    final uri = Uri.parse(base.endsWith('/models') ? base : '$base/models');
+    final res = await http.get(uri, headers: _headers());
+    _ensureOk(res);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final raw = data['data'];
+    if (raw is List) return raw.map((e) => e is Map ? e['id']?.toString() : e.toString()).whereType<String>().where((e) => e.isNotEmpty).toList();
+    return const [];
   }
 
   Future<String> _gemini(List<Map<String, String>> messages) async {

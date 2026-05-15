@@ -28,6 +28,7 @@ class AppState extends ChangeNotifier {
   bool busy = false;
   String conversationId = 'default_conversation';
   ToolPermissionMode permissionMode = ToolPermissionMode.askEveryTime;
+  String? selectedAiConfigId;
 
   AppState() {
     aiConfigs.add(const AiServiceConfig(
@@ -56,6 +57,8 @@ class AppState extends ChangeNotifier {
       ..addAll((serverDoc['items'] as List? ?? []).whereType<Map>().map((e) => ServerProfile.fromJson(Map<String, dynamic>.from(e))));
     final githubDoc = await store.readMap('profiles', 'github', fallback: const {});
     github = GitHubConfig.fromJson(githubDoc);
+    final activeAiDoc = await store.readMap('profiles', 'active_ai', fallback: const {});
+    selectedAiConfigId = activeAiDoc['id'] as String?;
     final aiDoc = await store.readMap('profiles', 'ai_services', fallback: {'items': <dynamic>[]});
     final aiItems = aiDoc['items'] as List? ?? [];
     if (aiItems.isNotEmpty) {
@@ -249,7 +252,7 @@ Future<void> runTerminalCommand(String command) async {
       addAssistantMessage('已记录你的需求。MTC 模式不会执行任何工具调用，我会先把想法整理成设计初版：\n\n$content\n\n如果这个方向没问题，请切换到 **Code** 模式，我会根据这份需求开始实现、调用工具并生成变更。');
       return;
     }
-    final cfg = aiConfigs.first;
+    final cfg = activeAiConfig;
     final prompt = '${AgentSystemPrompt.text}\n当前远程目录：$currentPath\n用户任务：$content';
     if (cfg.apiKey.isEmpty) {
       addAssistantMessage(
@@ -266,9 +269,9 @@ Future<void> runTerminalCommand(String command) async {
         {'role': 'user', 'content': prompt},
       ]);
       final parsed = _extractThinking(text);
-      addAssistantMessage(parsed.$2, thinking: parsed.$1);
+      addAssistantMessage(parsed.$2, thinking: parsed.$1, modelLabel: '${cfg.name} · ${cfg.model}');
     } catch (e) {
-      addAssistantMessage('AI 请求失败：$e');
+      addAssistantMessage('AI 请求失败：\n\n```text\n$e\n```', modelLabel: '${cfg.name} · ${cfg.model}');
     } finally {
       busy = false;
       notifyListeners();
@@ -335,6 +338,16 @@ Future<void> runTerminalCommand(String command) async {
     _replaceChange(changeId, FileChangeRecord(id: c.id, path: c.path, oldText: c.oldText, newText: c.newText, status: 'rejected'));
   }
 
+  AiServiceConfig get activeAiConfig => aiConfigs.firstWhere((e) => e.id == selectedAiConfigId, orElse: () => aiConfigs.first);
+
+  Future<void> setActiveAiConfig(String id) async {
+    selectedAiConfigId = id;
+    await store.writeMap('profiles', 'active_ai', {'id': id});
+    notifyListeners();
+  }
+
+  Future<List<String>> fetchModelsFor(AiServiceConfig config) => AiClient(config).fetchModels();
+
   Future<void> saveAiConfig(AiServiceConfig config) async {
     final index = aiConfigs.indexWhere((e) => e.id == config.id);
     if (index >= 0) {
@@ -343,6 +356,8 @@ Future<void> runTerminalCommand(String command) async {
       aiConfigs.add(config);
     }
     await store.writeMap('profiles', 'ai_services', {'items': aiConfigs.map((e) => e.toJson()).toList()});
+    selectedAiConfigId ??= config.id;
+    await store.writeMap('profiles', 'active_ai', {'id': selectedAiConfigId});
     notifyListeners();
   }
 
@@ -364,9 +379,47 @@ Future<void> runTerminalCommand(String command) async {
     _saveConversations();
   }
 
-  void addAssistantMessage(String content, {String? thinking, List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {
-    messages.add(AgentMessage(id: const Uuid().v4(), role: 'assistant', content: content, createdAt: DateTime.now(), thinking: thinking, toolCalls: toolCalls, changes: changes));
+  void addAssistantMessage(String content, {String? thinking, String? modelLabel, List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {
+    messages.add(AgentMessage(id: const Uuid().v4(), role: 'assistant', content: content, createdAt: DateTime.now(), thinking: thinking, modelLabel: modelLabel, toolCalls: toolCalls, changes: changes));
     notifyListeners();
+  }
+
+
+
+  void deleteMessage(String id) {
+    messages.removeWhere((e) => e.id == id);
+    _rewriteMemoryFromMessages();
+    notifyListeners();
+  }
+
+  String? rollbackToMessage(String id) {
+    final idx = messages.indexWhere((e) => e.id == id);
+    if (idx < 0) return null;
+    final text = messages[idx].content;
+    messages.removeRange(idx, messages.length);
+    _rewriteMemoryFromMessages();
+    notifyListeners();
+    return text;
+  }
+
+  Future<void> regenerateAfter(String id) async {
+    final idx = messages.indexWhere((e) => e.id == id);
+    if (idx <= 0) return;
+    final prevUsers = messages.take(idx).where((e) => e.role == 'user').toList();
+    if (prevUsers.isEmpty) return;
+    messages.removeRange(idx, messages.length);
+    notifyListeners();
+    await sendAgentTask(prevUsers.last.content);
+  }
+
+  Future<void> _rewriteMemoryFromMessages() async {
+    await store.writeMap('memory', conversationId, {'events': messages.map((m) => {'type': 'message', 'role': m.role, 'content': m.content, 'at': m.createdAt.toIso8601String()}).toList()});
+  }
+
+  Future<void> summarizeCurrentMemory() async {
+    final content = messages.map((m) => '${m.role}: ${m.content}').join('\n');
+    final summary = content.length > 1400 ? '${content.substring(0, 1400)}\n...已压缩 ${messages.length} 条上下文。' : content;
+    await store.writeMap('memory', conversationId, {'events': [{'type': 'summary', 'content': summary, 'at': DateTime.now().toIso8601String()}]});
   }
 
   String _autoStatus(String tool) {
@@ -398,7 +451,7 @@ Future<void> runTerminalCommand(String command) async {
     if (found == null) return;
     final msg = messages[found.$1];
     final tools = msg.toolCalls.map((e) => e.id == id ? next : e).toList();
-      messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, toolCalls: tools, changes: msg.changes);
+      messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, modelLabel: msg.modelLabel, toolCalls: tools, changes: msg.changes);
     notifyListeners();
   }
 
@@ -407,7 +460,7 @@ Future<void> runTerminalCommand(String command) async {
     if (found == null) return;
     final msg = messages[found.$1];
     final changes = msg.changes.map((e) => e.id == id ? next : e).toList();
-    messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, toolCalls: msg.toolCalls, changes: changes);
+    messages[found.$1] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, modelLabel: msg.modelLabel, toolCalls: msg.toolCalls, changes: changes);
     notifyListeners();
   }
 
