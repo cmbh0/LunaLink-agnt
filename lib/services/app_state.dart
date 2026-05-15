@@ -440,13 +440,6 @@ Future<void> runTerminalCommand(String command) async {
     final summary = content.length > 1400 ? '${content.substring(0, 1400)}\n...已压缩 ${messages.length} 条上下文。' : content;
     await store.writeMap('memory', conversationId, {'events': [{'type': 'summary', 'content': summary, 'at': DateTime.now().toIso8601String()}]});
   }
-
-  String _autoStatus(String tool) {
-    if (permissionMode == ToolPermissionMode.autoAll) return 'auto';
-    if (permissionMode == ToolPermissionMode.autoReadOnly && {'list_files', 'read_file'}.contains(tool)) return 'auto';
-    return 'needs_approval';
-  }
-
   (int, ToolCallRecord)? _findTool(String id) {
     for (var i = 0; i < messages.length; i++) {
       for (final t in messages[i].toolCalls) {

@@ -234,7 +234,7 @@ class _Bubble extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (!isUser && message.modelLabel?.isNotEmpty == true) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(message.modelLabel!, style: const TextStyle(fontSize: 11, color: MoonColors.muted))),
             if (message.thinking?.isNotEmpty == true) _Fold(title: '思考内容', icon: Icons.psychology_rounded, child: Text(message.thinking!, style: const TextStyle(color: MoonColors.muted))),
-            MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.42), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn, backgroundColor: Color(0xFFF5F2FF)), codeblockPadding: const EdgeInsets.all(12), codeblockDecoration: BoxDecoration(color: const Color(0xFFF6F2FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2D8FF))))),,
+            MarkdownBody(data: message.content, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(color: MoonColors.text, height: 1.42), code: const TextStyle(fontFamily: 'monospace', color: MoonColors.warn, backgroundColor: Color(0xFFF5F2FF)), codeblockPadding: const EdgeInsets.all(12), codeblockDecoration: BoxDecoration(color: const Color(0xFFF6F2FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2D8FF))))),
             for (final t in message.toolCalls) _ToolApproval(call: t),
             for (final c in message.changes) _ChangeApproval(change: c),
           ]),
