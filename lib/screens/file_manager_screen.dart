@@ -24,7 +24,7 @@ class FileManagerScreen extends StatelessWidget {
           PopupMenuButton<String>(
             onSelected: (v) => _handleTopAction(context, v),
             itemBuilder: (_) => const [
-const PopupMenuItem(value: 'new_file', child: Text('新建文件')),
+PopupMenuItem(value: 'new_file', child: Text('新建文件')),
               PopupMenuItem(value: 'new_dir', child: Text('新建文件夹')),
               PopupMenuItem(value: 'upload', child: Text('上传本地文件')),
               PopupMenuItem(value: 'terminal', child: Text('在此处打开终端')),
@@ -91,7 +91,7 @@ class _FileTile extends StatelessWidget {
       trailing: PopupMenuButton<String>(
         onSelected: (v) => _handleEntryAction(context, v),
         itemBuilder: (_) => const [
-const PopupMenuItem(value: 'rename', child: Text('重命名')),
+PopupMenuItem(value: 'rename', child: Text('重命名')),
           PopupMenuItem(value: 'duplicate', child: Text('复制')),
           PopupMenuItem(value: 'chmod', child: Text('权限 chmod')),
           PopupMenuItem(value: 'download', child: Text('下载到应用目录')),

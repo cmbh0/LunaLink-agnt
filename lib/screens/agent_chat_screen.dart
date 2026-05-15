@@ -30,9 +30,9 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     final state = context.watch<AppState>();
     return Column(children: [
       const SizedBox(height: 58),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(68, 0, 68, 8),
-        child: Column(children: const [
+      const Padding(
+        padding: EdgeInsets.fromLTRB(68, 0, 68, 8),
+        child: Column(children: [
           Text('LunaLink Agent', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: .2)),
           SizedBox(height: 2),
           Text('移动端 AI 开发工作台', style: TextStyle(color: MoonColors.muted, fontSize: 12)),

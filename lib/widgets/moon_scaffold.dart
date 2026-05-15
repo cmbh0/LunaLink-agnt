@@ -63,7 +63,10 @@ class _SkyPainter extends CustomPainter {
       path.cubicTo(size.width * .25, y - 35, size.width * .58, y + 42, size.width + 40, y - 10);
       canvas.drawPath(path, flow);
     }
-    final meteor = Paint()..shader = LinearGradient(colors: [Colors.transparent, MoonColors.moon.withOpacity(.8)]).createShader(Rect.fromLTWH(0, 0, 180, 80))..strokeWidth = 2..strokeCap = StrokeCap.round;
+    final meteor = Paint()
+      ..shader = LinearGradient(colors: [Colors.transparent, MoonColors.moon.withOpacity(.8)]).createShader(Rect.fromLTWH(0, 0, 180, 80))
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
     final mx = size.width * (1.15 - t * 1.45);
     final my = size.height * (.18 + t * .38);
     canvas.drawLine(Offset(mx, my), Offset(mx + 92, my - 38), meteor);
