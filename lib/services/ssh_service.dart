@@ -41,7 +41,7 @@ class SshService {
   }
 
   Future<ServerInfo> readInfo() async {
-    final script = r'''
+    const script = r'''
 printf "HOST=%s\n" "$(hostname)"
 printf "OS=%s\n" "$(. /etc/os-release 2>/dev/null; echo ${PRETTY_NAME:-unknown})"
 printf "KERNEL=%s\n" "$(uname -r)"
