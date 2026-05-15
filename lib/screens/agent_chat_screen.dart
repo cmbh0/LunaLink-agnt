@@ -56,6 +56,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     final state = context.read<AppState>();
     final cfg = state.aiConfigs.first;
     var provider = cfg.provider;
+    var apiMode = cfg.apiMode;
     var enableThinking = cfg.enableThinking;
     var stream = cfg.streamOutput;
     final endpoint = TextEditingController(text: cfg.endpoint);
@@ -79,6 +80,13 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
             items: AiProviderType.values.map((e) => DropdownMenuItem(value: e, child: Text(e.name))).toList(),
             decoration: const InputDecoration(labelText: '模型提供商'),
           ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<AiApiMode>(
+            value: apiMode,
+            onChanged: (v) => setDialog(() => apiMode = v!),
+            items: const [DropdownMenuItem(value: AiApiMode.messages, child: Text('Messages / Chat Completions')), DropdownMenuItem(value: AiApiMode.responses, child: Text('Responses'))],
+            decoration: const InputDecoration(labelText: '接口模式'),
+          ),
           const SizedBox(height: 8), TextField(controller: endpoint, decoration: const InputDecoration(labelText: '接口地址 Endpoint')),
           const SizedBox(height: 8), TextField(controller: model, decoration: const InputDecoration(labelText: '对话模型')),
           const SizedBox(height: 8), TextField(controller: thinkingModel, decoration: const InputDecoration(labelText: '思考模型 / Reasoning Model')),
@@ -88,7 +96,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
           SwitchListTile(contentPadding: EdgeInsets.zero, value: stream, onChanged: (v) => setDialog(() => stream = v), title: const Text('默认流式输出')),
           const SizedBox(height: 8),
           Row(children: [Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('取消'))), const SizedBox(width: 10), Expanded(child: FilledButton(onPressed: () async {
-            await state.saveAiConfig(AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim().isEmpty ? cfg.model : model.text.trim(), thinkingModel: thinkingModel.text.trim().isEmpty ? null : thinkingModel.text.trim(), enableThinking: enableThinking, streamOutput: stream, temperature: double.tryParse(temp.text) ?? .2, maxTokens: int.tryParse(maxTokens.text) ?? 4096, permissionMode: state.permissionMode));
+            await state.saveAiConfig(AiServiceConfig(id: cfg.id, name: provider.name, provider: provider, endpoint: endpoint.text.trim(), apiKey: key.text, model: model.text.trim().isEmpty ? cfg.model : model.text.trim(), thinkingModel: thinkingModel.text.trim().isEmpty ? null : thinkingModel.text.trim(), enableThinking: enableThinking, streamOutput: stream, temperature: double.tryParse(temp.text) ?? .2, maxTokens: int.tryParse(maxTokens.text) ?? 4096, apiMode: apiMode, permissionMode: state.permissionMode));
             if (context.mounted) Navigator.pop(context);
           }, child: const Text('保存')))]),
         ])),
@@ -279,7 +287,7 @@ class _Composer extends StatelessWidget {
           decoration: const InputDecoration(hintText: '发消息...', border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, filled: false, contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4)),
         ),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          _MiniAction(icon: Icons.cloud_outlined, label: 'Cloud', onTap: () => Navigator.push(context, _softRoute(const ConnectScreen(fullPage: true)))),
+          _MiniAction(icon: const Icon(Icons.cloud_outlined, size: 16), label: 'Cloud', onTap: () => Navigator.push(context, _softRoute(const ConnectScreen(fullPage: true)))),
           const SizedBox(width: 10),
           _MiniAction.custom(icon: const _GitHubMark(size: 15), label: 'GitHub', onTap: () => Navigator.push(context, _softRoute(const GitHubSettingsScreen()))),
           const Spacer(),
@@ -301,7 +309,7 @@ class _MiniAction extends StatelessWidget {
   final Widget icon;
   final String label;
   final VoidCallback onTap;
-  const _MiniAction({required IconData icon, required this.label, required this.onTap}) : icon = Icon(icon, size: 16);
+  const _MiniAction({required this.icon, required this.label, required this.onTap});
   const _MiniAction.custom({required this.icon, required this.label, required this.onTap});
   @override
   Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(14), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6), child: Row(mainAxisSize: MainAxisSize.min, children: [icon, const SizedBox(width: 4), Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))])));

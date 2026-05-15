@@ -10,7 +10,7 @@ class AiClient {
     switch (config.provider) {
       case AiProviderType.openai:
       case AiProviderType.rest:
-        return _openAiCompatible(messages);
+        return config.apiMode == AiApiMode.responses ? _openAiResponses(messages) : _openAiCompatible(messages);
       case AiProviderType.gemini:
         return _gemini(messages);
       case AiProviderType.claude:
@@ -33,6 +33,30 @@ class AiClient {
     _ensureOk(res);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return data['choices']?[0]?['message']?['content'] as String? ?? res.body;
+  }
+
+  Future<String> _openAiResponses(List<Map<String, String>> messages) async {
+    final uri = Uri.parse(config.endpoint.endsWith('/responses') ? config.endpoint : '${config.endpoint}/responses');
+    final input = messages.map((m) => {'role': m['role'], 'content': m['content']}).toList();
+    final res = await http.post(uri, headers: _headers(), body: jsonEncode({'model': config.enableThinking && (config.thinkingModel?.isNotEmpty ?? false) ? config.thinkingModel : config.model, 'input': input, 'temperature': config.temperature, 'max_output_tokens': config.maxTokens}));
+    _ensureOk(res);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final outputText = data['output_text'] as String?;
+    if (outputText != null) return outputText;
+    final output = data['output'];
+    if (output is List) {
+      final parts = <String>[];
+      for (final item in output) {
+        final content = item is Map ? item['content'] : null;
+        if (content is List) {
+          for (final c in content) {
+            if (c is Map && c['text'] is String) parts.add(c['text'] as String);
+          }
+        }
+      }
+      if (parts.isNotEmpty) return parts.join('\n');
+    }
+    return res.body;
   }
 
   Future<String> _gemini(List<Map<String, String>> messages) async {

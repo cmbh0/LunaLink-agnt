@@ -32,9 +32,11 @@ class GitHubConfig {
 
 enum AiProviderType { openai, gemini, claude, rest }
 
+enum AiApiMode { messages, responses }
+
 enum ToolPermissionMode { askEveryTime, autoReadOnly, autoAll }
 
-static const Map<AiProviderType, String> providerEndpoints = {
+const Map<AiProviderType, String> providerEndpoints = {
   AiProviderType.openai: 'https://api.openai.com/v1',
   AiProviderType.gemini: 'https://generativelanguage.googleapis.com/v1beta/openai',
   AiProviderType.claude: 'https://api.anthropic.com/v1',
@@ -54,6 +56,7 @@ class AiServiceConfig {
   final double temperature;
   final int maxTokens;
   final Map<String, String> headers;
+  final AiApiMode apiMode;
   final ToolPermissionMode permissionMode;
 
   const AiServiceConfig({
@@ -69,6 +72,7 @@ class AiServiceConfig {
     this.temperature = .2,
     this.maxTokens = 4096,
     this.headers = const {},
+    this.apiMode = AiApiMode.messages,
     this.permissionMode = ToolPermissionMode.askEveryTime,
   });
 
@@ -85,6 +89,7 @@ class AiServiceConfig {
         'temperature': temperature,
         'maxTokens': maxTokens,
         'headers': headers,
+        'apiMode': apiMode.name,
         'permissionMode': permissionMode.name,
       };
 
@@ -101,6 +106,7 @@ class AiServiceConfig {
         temperature: (json['temperature'] as num?)?.toDouble() ?? .2,
         maxTokens: json['maxTokens'] as int? ?? 4096,
         headers: Map<String, String>.from(json['headers'] as Map? ?? {}),
+        apiMode: AiApiMode.values.firstWhere((e) => e.name == json['apiMode'], orElse: () => AiApiMode.messages),
         permissionMode: ToolPermissionMode.values.firstWhere((e) => e.name == json['permissionMode'], orElse: () => ToolPermissionMode.askEveryTime),
       );
 }
