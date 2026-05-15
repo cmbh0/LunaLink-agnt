@@ -1,0 +1,35 @@
+name: lunalink_agnt
+description: LunaLink Agent - Android SSH/SFTP file manager and AI coding agent.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  dartssh2: ^2.9.0
+  http: ^1.2.2
+  path: ^1.9.0
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+  file_picker: ^8.1.2
+  image: ^4.2.0
+  video_player: ^2.9.2
+  audioplayers: ^6.1.0
+  crypto: ^3.0.5
+  uuid: ^4.5.1
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

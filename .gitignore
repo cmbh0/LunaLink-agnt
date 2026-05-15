@@ -1,0 +1,29 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+android/.gradle/
+android/local.properties
+*.jks
+*.keystore
+
+# Operit workspace metadata
+.operit/
+.backup/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.iml
+
+# Secrets
+.env
+*.pem
+*.key
