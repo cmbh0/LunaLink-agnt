@@ -16,10 +16,12 @@ class AppState extends ChangeNotifier {
   final servers = <ServerProfile>[];
   final aiConfigs = <AiServiceConfig>[];
   final messages = <AgentMessage>[];
+  final conversations = <ConversationMeta>[];
   final terminalLogs = <String>['LunaLink SSH Terminal ready.'];
   GitHubConfig github = const GitHubConfig();
   String? activeServerId;
   bool autoReconnect = true;
+  AgentMode agentMode = AgentMode.npc;
   ServerInfo? serverInfo;
   String currentPath = '/';
   List<RemoteFileEntry> files = [];
@@ -40,6 +42,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> loadPersistedState() async {
+    final convDoc = await store.readMap('memory', 'conversations', fallback: {'items': <dynamic>[]});
+    conversations
+      ..clear()
+      ..addAll((convDoc['items'] as List? ?? []).whereType<Map>().map((e) => ConversationMeta.fromJson(Map<String, dynamic>.from(e))));
+    if (conversations.isEmpty) {
+      conversations.add(ConversationMeta(id: conversationId, title: '默认话题', updatedAt: DateTime.now()));
+      await _saveConversations();
+    }
     final serverDoc = await store.readMap('profiles', 'servers', fallback: {'items': <dynamic>[]});
     servers
       ..clear()
@@ -56,6 +66,27 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setAgentMode(AgentMode mode) async {
+    agentMode = mode;
+    notifyListeners();
+  }
+
+  Future<void> newConversation() async {
+    conversationId = const Uuid().v4();
+    messages.clear();
+    conversations.insert(0, ConversationMeta(id: conversationId, title: '新话题 ${conversations.length + 1}', updatedAt: DateTime.now()));
+    await _saveConversations();
+    notifyListeners();
+  }
+
+  Future<void> switchConversation(String id) async {
+    conversationId = id;
+    messages.clear();
+    notifyListeners();
+  }
+
+  Future<void> _saveConversations() => store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList()});
+
   Future<void> saveGitHubConfig(GitHubConfig config) async {
     github = config;
     await store.writeMap('profiles', 'github', config.toJson());
@@ -67,7 +98,7 @@ class AppState extends ChangeNotifier {
     await connect(profile);
   }
 
-  Future<T> _withReconnect<T>(Future<T> Function() action) async {
+  Future<T> withReconnect<T>(Future<T> Function() action) async {
     try {
       return await action();
     } catch (_) {
@@ -179,6 +210,10 @@ Future<void> runTerminalCommand(String command) async {
 
   Future<void> sendAgentTask(String content) async {
     addUserMessage(content);
+    if (agentMode == AgentMode.npc) {
+      addAssistantMessage('已记录你的需求。NPC 模式不会执行任何工具调用，我会先把想法整理成设计初版：\n\n$content\n\n如果这个方向没问题，请切换到 **Code** 模式，我会根据这份需求开始实现、调用工具并生成变更。');
+      return;
+    }
     final cfg = aiConfigs.first;
     final prompt = '${AgentSystemPrompt.text}\n当前远程目录：$currentPath\n用户任务：$content';
     if (cfg.apiKey.isEmpty) {
@@ -278,7 +313,20 @@ Future<void> runTerminalCommand(String command) async {
 
   void addUserMessage(String content) {
     messages.add(AgentMessage(id: const Uuid().v4(), role: 'user', content: content, createdAt: DateTime.now()));
+    _touchConversation(content);
     notifyListeners();
+  }
+
+  void _touchConversation(String titleHint) {
+    final idx = conversations.indexWhere((e) => e.id == conversationId);
+    final title = titleHint.length > 16 ? '${titleHint.substring(0, 16)}...' : titleHint;
+    final next = ConversationMeta(id: conversationId, title: title.isEmpty ? '新话题' : title, updatedAt: DateTime.now());
+    if (idx >= 0) {
+      conversations[idx] = next;
+    } else {
+      conversations.insert(0, next);
+    }
+    _saveConversations();
   }
 
   void addAssistantMessage(String content, {String? thinking, List<ToolCallRecord> toolCalls = const [], List<FileChangeRecord> changes = const []}) {

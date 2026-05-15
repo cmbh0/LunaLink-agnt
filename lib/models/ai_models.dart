@@ -1,3 +1,19 @@
+class ConversationMeta {
+  final String id;
+  final String title;
+  final DateTime updatedAt;
+  const ConversationMeta({required this.id, required this.title, required this.updatedAt});
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'updatedAt': updatedAt.toIso8601String()};
+  factory ConversationMeta.fromJson(Map<String, dynamic> json) => ConversationMeta(
+        id: json['id'] as String,
+        title: json['title'] as String? ?? '新话题',
+        updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
+      );
+}
+
+enum AgentMode { npc, code }
+
 class GitHubConfig {
   final String token;
   final bool autoApprove;

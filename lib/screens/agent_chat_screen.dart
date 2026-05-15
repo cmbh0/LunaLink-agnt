@@ -76,36 +76,43 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onSettings;
   const _TopBar({required this.onSettings});
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-    child: Row(children: [
-      _CircleButton(icon: Icons.arrow_back_ios_new_rounded, onTap: () {}),
-      const Spacer(),
-      Container(
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(color: const Color(0xFFE9E9E9), borderRadius: BorderRadius.circular(32)),
-        child: Row(children: [
-          _Segment(text: 'MTC', selected: false),
-          _Segment(text: 'Code', selected: true),
-        ]),
-      ),
-      const Spacer(),
-      _CircleButton(icon: Icons.tune_rounded, onTap: onSettings),
-    ]),
-  );
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 18, 0),
+      child: Row(children: [
+        IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 30)),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(color: const Color(0xFFE9E9E9), borderRadius: BorderRadius.circular(32)),
+          child: Row(children: [
+            _Segment(text: 'NPC', selected: state.agentMode == AgentMode.npc, onTap: () => context.read<AppState>().setAgentMode(AgentMode.npc)),
+            _Segment(text: 'Code', selected: state.agentMode == AgentMode.code, onTap: () => context.read<AppState>().setAgentMode(AgentMode.code)),
+          ]),
+        ),
+        const Spacer(),
+        _CircleButton(icon: Icons.tune_rounded, onTap: onSettings),
+      ]),
+    );
+  }
 }
 
 class _Segment extends StatelessWidget {
   final String text;
   final bool selected;
-  const _Segment({required this.text, required this.selected});
+  final VoidCallback onTap;
+  const _Segment({required this.text, required this.selected, required this.onTap});
   @override
-  Widget build(BuildContext context) => Container(
-    width: 92,
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    decoration: BoxDecoration(color: selected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(28), boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 8)] : null),
-    alignment: Alignment.center,
-    child: Text(text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 92,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(color: selected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(28), boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(.08), blurRadius: 8)] : null),
+      alignment: Alignment.center,
+      child: Text(text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+    ),
   );
 }
 
