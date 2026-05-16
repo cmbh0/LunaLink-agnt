@@ -39,12 +39,12 @@ const Text('连接服务器 / 虚拟主机', style: TextStyle(fontSize: 24, font
          ),
        ),
        const SizedBox(height: 12),
-       DropdownButtonFormField<ServerAccessMode>(
-         value: mode,
-         decoration: const InputDecoration(labelText: '连接模式'),
-         items: ServerAccessMode.values.map((e) => DropdownMenuItem(value: e, child: Text(e.label))).toList(),
-         onChanged: (v) => setState(() { mode = v ?? ServerAccessMode.linux; port.text = mode == ServerAccessMode.ftp ? '21' : '22'; }),
-       ),
+MoonSelectField<ServerAccessMode>(
+          value: mode,
+          label: '连接模式',
+          options: ServerAccessMode.values.map((e) => MoonSelectOption(value: e, label: e.label, icon: e == ServerAccessMode.ftp ? Icons.folder_shared_outlined : e == ServerAccessMode.sftp ? Icons.folder_copy_outlined : Icons.terminal_rounded)).toList(),
+          onChanged: (v) => setState(() { mode = v ?? ServerAccessMode.linux; port.text = mode == ServerAccessMode.ftp ? '21' : '22'; }),
+        ),
       TextField(controller: host, decoration: const InputDecoration(labelText: 'Host / IP')),
       const SizedBox(height: 10),
       Row(children: [Expanded(child: TextField(controller: port, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: mode == ServerAccessMode.ftp ? 'FTP Port' : 'SSH/SFTP Port'))), const SizedBox(width: 10), Expanded(child: TextField(controller: user, decoration: const InputDecoration(labelText: 'Username')))]),
@@ -73,10 +73,11 @@ label: Text(mode.terminalEnabled ? '连接并读取服务器信息' : '连接文
           subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${s.username}@${s.host}:${s.port} · ${s.rootPath}'),
             const SizedBox(height: 6),
-            DropdownButtonFormField<bool>(
+            MoonSelectField<bool>(
               value: s.autoConnect,
-              decoration: const InputDecoration(labelText: '启动时自动连接', isDense: true),
-              items: const [DropdownMenuItem(value: false, child: Text('不自动连接')), DropdownMenuItem(value: true, child: Text('自动连接此项'))],
+              label: '启动时自动连接',
+              dense: true,
+              options: const [MoonSelectOption(value: false, label: '不自动连接', icon: Icons.link_off_rounded), MoonSelectOption(value: true, label: '自动连接此项', icon: Icons.link_rounded)],
               onChanged: (v) => context.read<AppState>().updateServerAutoConnect(s.id, v ?? false),
             ),
           ]),

@@ -925,10 +925,12 @@ Future<void> sendTerminalKey(String sequence, String label) async {
           }
           break;
         case 'browser_open':
-        case 'web_open':
-        case 'web_search':
-        case 'browser_search':
-          output = await _browserFetch(call);
+      case 'web_open':
+      case 'web_search':
+      case 'browser_search':
+      case 'browser_click':
+      case 'web_click':
+        output = await _browserFetch(call);
           break;
         case 'github_api':
         case 'github_request':
@@ -1026,8 +1028,9 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     'create_dir': 'mkdir', 'make_directory': 'mkdir',
     'local_ls': 'local_list_files', 'workspace_list_files': 'local_list_files', 'local_cat': 'local_read_file', 'workspace_read_file': 'local_read_file',
     'local_write': 'local_write_file', 'workspace_write_file': 'local_write_file', 'local_create_file': 'local_write_file', 'local_create_dir': 'local_mkdir', 'workspace_mkdir': 'local_mkdir',
-    'browser': 'browser_open', 'web': 'browser_open', 'open_url': 'browser_open', 'browser_open': 'browser_open', 'web_open': 'browser_open',
-    'search': 'web_search', 'web_search': 'web_search', 'browser_search': 'web_search',
+'browser': 'browser_open', 'web': 'browser_open', 'open_url': 'browser_open', 'browser_open': 'browser_open', 'web_open': 'browser_open',
+      'click_link': 'browser_click', 'browser_click': 'browser_click', 'web_click': 'browser_click',
+      'search': 'web_search', 'web_search': 'web_search', 'browser_search': 'web_search',
     'github_api': 'github_api', 'github_request': 'github_api',
     'github_me': 'github_verify_token', 'github_user': 'github_verify_token',
     'github_repos': 'github_list_repos', 'github_repo': 'github_get_repo',
@@ -1062,6 +1065,12 @@ ${_toolUsageExample(call.tool)}
 ${_toolUsageExample(call.tool)}''';
 
   Future<String> _browserFetch(ToolCallRecord call) async {
+    if (call.tool == 'browser_click' || call.tool == 'web_click') {
+      final target = _resolveBrowserClickTarget(call);
+      if (target == null) throw StateError('没有可点击的浏览器链接。请先 web_search/browser_open，或传入 url/text/index。');
+      final redirected = ToolCallRecord(id: call.id, tool: 'browser_open', arguments: {'url': target}, status: call.status);
+      return _browserFetch(redirected);
+    }
     final query = call.arguments['query']?.toString().trim() ?? '';
     final rawUrl = call.arguments['url']?.toString().trim();
     final url = rawUrl != null && rawUrl.isNotEmpty
@@ -1091,6 +1100,24 @@ ${_toolUsageExample(call.tool)}''';
     notifyListeners();
     final linkText = links.isEmpty ? '' : '\n\nExtracted links:\n${links.take(12).map((e) => '- $e').join('\n')}';
     return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${_clip(text, 3200)}$linkText$detail';
+  }
+
+  String? _resolveBrowserClickTarget(ToolCallRecord call) {
+    final direct = call.arguments['url']?.toString().trim();
+    if (direct != null && direct.isNotEmpty) return direct.startsWith('http') ? direct : 'https://$direct';
+    final links = browserSnapshot?.links ?? const <String>[];
+    final rawIndex = call.arguments['index'] ?? call.arguments['link'];
+    if (rawIndex != null) {
+      final index = rawIndex is num ? rawIndex.toInt() : int.tryParse(rawIndex.toString());
+      if (index != null && index > 0 && index <= links.length) return links[index - 1];
+    }
+    final needle = (call.arguments['text'] ?? call.arguments['query'] ?? call.arguments['contains'])?.toString().trim().toLowerCase();
+    if (needle != null && needle.isNotEmpty) {
+      for (final link in links) {
+        if (link.toLowerCase().contains(needle)) return link;
+      }
+    }
+    return links.isNotEmpty ? links.first : null;
   }
 
   String? _htmlTitle(String html) => RegExp(r'<title[^>]*>([\s\S]*?)<\/title>', caseSensitive: false).firstMatch(html)?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -1159,6 +1186,7 @@ ${_toolUsageExample(call.tool)}''';
   String _toolUsageExample(String tool) {
     final args = switch (tool) {
       'browser_open' => {'url': 'https://example.com'},
+      'browser_click' => {'index': 1},
       'web_search' => {'query': 'Flutter WebView'},
       'github_api' => {'method': 'GET', 'path': '/user', 'body': <String, dynamic>{}},
       'local_list_files' => <String, dynamic>{},

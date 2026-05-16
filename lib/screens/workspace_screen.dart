@@ -43,11 +43,11 @@ class WorkspaceScreen extends StatelessWidget {
             const SizedBox(height: 6),
             const Text('应用内创建的工作区全部是本地工作区，每个对话可绑定一个。', style: TextStyle(fontSize: 12, color: MoonColors.muted)),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String?>(
+            MoonSelectField<String>(
               value: state.boundWorkspaceId,
-              decoration: const InputDecoration(labelText: '绑定本地工作区'),
-              items: [const DropdownMenuItem<String?>(value: null, child: Text('不绑定')), ...state.localWorkspaces.map((w) => DropdownMenuItem<String?>(value: w.id, child: Text(w.name)))],
-              onChanged: (v) => context.read<AppState>().bindWorkspace(v),
+              label: '绑定本地工作区',
+              options: [const MoonSelectOption<String>(value: '', label: '不绑定', icon: Icons.link_off_rounded), ...state.localWorkspaces.map((w) => MoonSelectOption<String>(value: w.id, label: w.name, icon: Icons.folder_rounded))],
+              onChanged: (v) => context.read<AppState>().bindWorkspace(v == null || v.isEmpty ? null : v),
             ),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
@@ -65,11 +65,11 @@ class WorkspaceScreen extends StatelessWidget {
             const SizedBox(height: 6),
             const Text('Cloud 不在应用内创建工作区；这里只是绑定服务器上的一个目录，AI 可在该目录内继续创建项目目录和操作文件。', style: TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.4)),
             const SizedBox(height: 10),
-            DropdownButtonFormField<String?>(
-              value: state.boundCloudWorkspace?.serverId,
-              decoration: const InputDecoration(labelText: '绑定服务器'),
-              items: [const DropdownMenuItem<String?>(value: null, child: Text('不绑定')), ...cloudServers.map((s) => DropdownMenuItem<String?>(value: s.id, child: Text('${s.name} · ${s.mode.label}')))],
-              onChanged: (v) => context.read<AppState>().bindCloudWorkspace(serverId: v, path: v == null ? null : (state.boundCloudWorkspace?.path ?? state.currentPath)),
+            MoonSelectField<String>(
+              value: state.boundCloudWorkspace?.serverId ?? '',
+              label: '绑定服务器',
+              options: [const MoonSelectOption<String>(value: '', label: '不绑定', icon: Icons.link_off_rounded), ...cloudServers.map((s) => MoonSelectOption<String>(value: s.id, label: '${s.name} · ${s.mode.label}', icon: Icons.cloud_outlined))],
+              onChanged: (v) => context.read<AppState>().bindCloudWorkspace(serverId: v == null || v.isEmpty ? null : v, path: v == null || v.isEmpty ? null : (state.boundCloudWorkspace?.path ?? state.currentPath)),
             ),
             const SizedBox(height: 10),
             TextFormField(

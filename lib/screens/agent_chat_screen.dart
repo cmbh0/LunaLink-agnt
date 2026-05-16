@@ -639,10 +639,7 @@ class _EnvironmentDock extends StatelessWidget {
     return Positioned(
       top: top,
       right: 14,
-      child: Material(
-        color: Colors.transparent,
-        child: _EnvSwitch(state: state),
-      ),
+      child: _EnvSwitch(state: state),
     );
   }
 }
@@ -655,6 +652,9 @@ class _EnvSwitch extends StatelessWidget {
     return Theme(
       data: Theme.of(context).copyWith(splashColor: Colors.transparent, highlightColor: Colors.transparent, hoverColor: Colors.transparent),
       child: PopupMenuButton<DevelopmentEnvironment>(
+      clipBehavior: Clip.none,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
       tooltip: '开发环境',
       color: Colors.white,
       elevation: 10,

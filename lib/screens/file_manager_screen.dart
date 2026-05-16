@@ -109,17 +109,16 @@ class _FileToolbar extends StatelessWidget {
       IconButton(onPressed: isLocal ? onLocalUp : (path == '/' ? null : () => context.read<AppState>().openDir(_parent(path))), icon: const Icon(Icons.arrow_upward_rounded)),
       Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14)), child: Text(path, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)))),
       IconButton(onPressed: isLocal ? onLocalRefresh : () => context.read<AppState>().refreshFiles(), icon: const Icon(Icons.refresh_rounded)),
-      PopupMenuButton<String>(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: MoonColors.edge)),
-        onSelected: (v) => _handleTopAction(context, v),
-        itemBuilder: (_) => [
-          const PopupMenuItem(value: 'new_file', child: Text('新建文件')),
-          const PopupMenuItem(value: 'new_dir', child: Text('新建文件夹')),
-          if (!isLocal) const PopupMenuItem(value: 'upload', child: Text('上传本地文件')),
-          if (!isLocal) const PopupMenuItem(value: 'terminal', child: Text('在此处打开终端')),
-          if (!isLocal) const PopupMenuItem(value: 'ftp', child: Text('自动创建 FTP(vsftpd)')),
+      _MoonPopupButton(
+        icon: Icons.more_horiz_rounded,
+        items: [
+          const MoonSelectOption(value: 'new_file', label: '新建文件', icon: Icons.note_add_outlined),
+          const MoonSelectOption(value: 'new_dir', label: '新建文件夹', icon: Icons.create_new_folder_outlined),
+          if (!isLocal) const MoonSelectOption(value: 'upload', label: '上传本地文件', icon: Icons.upload_file_rounded),
+          if (!isLocal) const MoonSelectOption(value: 'terminal', label: '在此处打开终端', icon: Icons.terminal_rounded),
+          if (!isLocal) const MoonSelectOption(value: 'ftp', label: '自动创建 FTP(vsftpd)', icon: Icons.dns_outlined),
         ],
+        onSelected: (v) => _handleTopAction(context, v),
       ),
     ]),
   );
@@ -175,18 +174,17 @@ if (entry.isDirectory) {
               Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: entry.isDirectory ? FontWeight.w600 : FontWeight.w500, color: isBak ? MoonColors.warn : MoonColors.text)),
               Text('${entry.size} bytes  ${entry.permissions}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: MoonColors.muted)),
             ])),
-            PopupMenuButton<String>(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: MoonColors.edge)),
-              onSelected: (v) => _handleEntryAction(context, v),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'rename', child: Text('重命名')),
-                if (!entry.isDirectory) const PopupMenuItem(value: 'duplicate', child: Text('复制')),
-                if (!isLocal) const PopupMenuItem(value: 'chmod', child: Text('权限 chmod')),
-                if (!entry.isDirectory) PopupMenuItem(value: 'download', child: Text(isLocal ? '复制到下载目录' : '下载到默认下载目录')),
-                if (!isLocal && isBak) const PopupMenuItem(value: 'restore', child: Text('从备份还原')),
-                const PopupMenuItem(value: 'delete', child: Text('删除')),
+            _MoonPopupButton(
+              icon: Icons.more_vert_rounded,
+              items: [
+                const MoonSelectOption(value: 'rename', label: '重命名', icon: Icons.drive_file_rename_outline_rounded),
+                if (!entry.isDirectory) const MoonSelectOption(value: 'duplicate', label: '复制', icon: Icons.copy_rounded),
+                if (!isLocal) const MoonSelectOption(value: 'chmod', label: '权限 chmod', icon: Icons.admin_panel_settings_outlined),
+                if (!entry.isDirectory) MoonSelectOption(value: 'download', label: isLocal ? '复制到下载目录' : '下载到默认下载目录', icon: Icons.download_rounded),
+                if (!isLocal && isBak) const MoonSelectOption(value: 'restore', label: '从备份还原', icon: Icons.restore_rounded),
+                const MoonSelectOption(value: 'delete', label: '删除', icon: Icons.delete_outline_rounded),
               ],
+              onSelected: (v) => _handleEntryAction(context, v),
             ),
           ]),
         ),
@@ -212,6 +210,40 @@ if (entry.isDirectory) {
       if (ok == true) { isLocal ? await state.deleteLocalEntry(entry) : await state.deleteRemote(entry); reload(); }
     }
   }
+}
+
+class _MoonPopupButton extends StatelessWidget {
+  final IconData icon;
+  final List<MoonSelectOption<String>> items;
+  final ValueChanged<String> onSelected;
+  const _MoonPopupButton({required this.icon, required this.items, required this.onSelected});
+  @override
+  Widget build(BuildContext context) => IconButton(
+        icon: Icon(icon),
+        onPressed: () async {
+          final selected = await showModalBottomSheet<String>(
+            context: context,
+            backgroundColor: Colors.transparent,
+            builder: (_) => Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+              child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: items.map((item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => Navigator.pop(context, item.value),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                    decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.edge)),
+                    child: Row(children: [Icon(item.icon ?? Icons.circle_outlined, size: 18, color: MoonColors.muted), const SizedBox(width: 10), Expanded(child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.text)))]),
+                  ),
+                ),
+              )).toList())),
+            ),
+          );
+          if (selected != null) onSelected(selected);
+        },
+      );
 }
 
 IconData _iconFor(String name) {
