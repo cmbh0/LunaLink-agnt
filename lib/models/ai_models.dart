@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:path/path.dart' as p;
+
 class ConversationMeta {
   final String id;
   final String title;
@@ -41,8 +44,8 @@ extension AiApiModeLabel on AiApiMode {
         AiApiMode.messages => '自定义 Messages Endpoint',
       };
 }
+enum ToolPermissionMode { askEveryTime, autoAll }
 
-enum ToolPermissionMode { askEveryTime, autoReadOnly, autoAll }
 
 const Map<AiProviderType, String> providerEndpoints = {
   AiProviderType.openai: 'https://api.openai.com/v1',
@@ -88,7 +91,7 @@ class AiServiceConfig {
     this.temperature = .2,
     this.maxTokens = 4096,
     this.headers = const {},
-    this.apiMode = AiApiMode.messages,
+    this.apiMode = AiApiMode.openAiChat,
     this.permissionMode = ToolPermissionMode.askEveryTime,
   });
 
@@ -155,6 +158,35 @@ class AgentMessage {
     this.toolCalls = const [],
     this.changes = const [],
   });
+
+  Map<String, dynamic> toJson() => {
+        'type': 'message',
+        'id': id,
+        'role': role,
+        'content': content,
+        'thinking': thinking,
+        'modelLabel': modelLabel,
+        'toolCalls': toolCalls.map((e) => e.toJson()).toList(),
+        'changes': changes.map((e) => e.toJson()).toList(),
+        'at': createdAt.toIso8601String(),
+      };
+
+  AgentMessage copyWith({
+    String? content,
+    String? thinking,
+    String? modelLabel,
+    List<ToolCallRecord>? toolCalls,
+    List<FileChangeRecord>? changes,
+  }) => AgentMessage(
+        id: id,
+        role: role,
+        content: content ?? this.content,
+        createdAt: createdAt,
+        thinking: thinking ?? this.thinking,
+        modelLabel: modelLabel ?? this.modelLabel,
+        toolCalls: toolCalls ?? this.toolCalls,
+        changes: changes ?? this.changes,
+      );
 }
 
 class ToolCallRecord {
@@ -164,6 +196,16 @@ class ToolCallRecord {
   final String status;
   final String? output;
   const ToolCallRecord({required this.id, required this.tool, required this.arguments, this.status = 'pending', this.output});
+
+  Map<String, dynamic> toJson() => {'id': id, 'tool': tool, 'arguments': arguments, 'status': status, 'output': output};
+
+  factory ToolCallRecord.fromJson(Map<String, dynamic> json) => ToolCallRecord(
+        id: json['id'] as String? ?? '',
+        tool: json['tool'] as String? ?? '',
+        arguments: Map<String, dynamic>.from(json['arguments'] as Map? ?? {}),
+        status: json['status'] as String? ?? 'pending',
+        output: json['output'] as String?,
+      );
 }
 
 class FileChangeRecord {
@@ -173,4 +215,61 @@ class FileChangeRecord {
   final String newText;
   final String status;
   const FileChangeRecord({required this.id, required this.path, required this.oldText, required this.newText, this.status = 'pending'});
+
+  int get addedLines => _diffStats(oldText, newText).$1;
+  int get removedLines => _diffStats(oldText, newText).$2;
+  int get byteDelta => utf8.encode(newText).length - utf8.encode(oldText).length;
+  String get fileName => p.basename(path);
+
+  Map<String, dynamic> toJson() => {'id': id, 'path': path, 'oldText': oldText, 'newText': newText, 'status': status};
+
+  factory FileChangeRecord.fromJson(Map<String, dynamic> json) => FileChangeRecord(
+        id: json['id'] as String? ?? '',
+        path: json['path'] as String? ?? '',
+        oldText: json['oldText'] as String? ?? '',
+        newText: json['newText'] as String? ?? '',
+        status: json['status'] as String? ?? 'pending',
+      );
+}
+
+class AgentTodoItem {
+  final String title;
+  final String status;
+  const AgentTodoItem({required this.title, this.status = 'pending'});
+  bool get done => status == 'done';
+  bool get active => status == 'active' || status == 'running' || status == 'inProgress';
+  Map<String, dynamic> toJson() => {'title': title, 'status': status};
+  factory AgentTodoItem.fromJson(Map<String, dynamic> json) => AgentTodoItem(title: json['title'] as String? ?? '', status: json['status'] as String? ?? 'pending');
+}
+
+class AgentTodoPlan {
+  final String goal;
+  final List<AgentTodoItem> items;
+  const AgentTodoPlan({required this.goal, required this.items});
+  int get doneCount => items.where((e) => e.done).length;
+  int get totalCount => items.length;
+  bool get isEmpty => goal.trim().isEmpty && items.isEmpty;
+  Map<String, dynamic> toJson() => {'goal': goal, 'items': items.map((e) => e.toJson()).toList()};
+  factory AgentTodoPlan.fromJson(Map<String, dynamic> json) => AgentTodoPlan(
+        goal: json['goal'] as String? ?? '',
+        items: (json['items'] as List? ?? const []).whereType<Map>().map((e) => AgentTodoItem.fromJson(Map<String, dynamic>.from(e))).toList(),
+      );
+}
+
+(int, int) _diffStats(String oldText, String newText) {
+  final oldLines = oldText.isEmpty ? <String>[] : const LineSplitter().convert(oldText);
+  final newLines = newText.isEmpty ? <String>[] : const LineSplitter().convert(newText);
+  var prefix = 0;
+  while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] == newLines[prefix]) {
+    prefix++;
+  }
+  var oldSuffix = oldLines.length - 1;
+  var newSuffix = newLines.length - 1;
+  while (oldSuffix >= prefix && newSuffix >= prefix && oldLines[oldSuffix] == newLines[newSuffix]) {
+    oldSuffix--;
+    newSuffix--;
+  }
+  final removed = oldSuffix >= prefix ? oldSuffix - prefix + 1 : 0;
+  final added = newSuffix >= prefix ? newSuffix - prefix + 1 : 0;
+  return (added, removed);
 }

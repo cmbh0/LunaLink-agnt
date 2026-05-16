@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
+import '../theme/moon_theme.dart';
 
 class MoonScaffold extends StatelessWidget {
   final Widget child;
@@ -31,7 +32,9 @@ class _ConversationDrawerState extends State<_ConversationDrawer> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Drawer(
-      width: MediaQuery.sizeOf(context).width * .68,
+      width: MediaQuery.sizeOf(context).width * .72,
+      backgroundColor: const Color(0xFFFBFBFD),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(24))),
       child: SafeArea(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 8, 10),
@@ -66,12 +69,18 @@ class _ConversationDrawerState extends State<_ConversationDrawer> {
                 AnimatedCrossFade(
                   firstChild: const SizedBox.shrink(),
                   secondChild: Container(
-                    margin: const EdgeInsets.only(left: 12, right: 4, bottom: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(14)),
+                    margin: const EdgeInsets.only(left: 12, right: 4, bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: MoonColors.edge),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 3))],
+                    ),
                     child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                       _HistoryAction(icon: Icons.vertical_align_top_rounded, label: '置顶', onTap: () => context.read<AppState>().pinConversation(c.id)),
                       _HistoryAction(icon: Icons.arrow_upward_rounded, label: '上移', onTap: () => context.read<AppState>().moveConversationUp(c.id)),
+                      _HistoryAction(icon: Icons.arrow_downward_rounded, label: '下移', onTap: () => context.read<AppState>().moveConversationDown(c.id)),
                       _HistoryAction(icon: Icons.delete_outline_rounded, label: '删除', danger: true, onTap: () => context.read<AppState>().deleteConversation(c.id)),
                     ]),
                   ),
@@ -96,10 +105,19 @@ class _HistoryAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(10),
+    borderRadius: BorderRadius.circular(12),
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 17, color: danger ? Colors.red : Colors.black87), Text(label, style: TextStyle(fontSize: 10, color: danger ? Colors.red : Colors.black87))]),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(color: danger ? Colors.red.withOpacity(.08) : MoonColors.panel2, borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, size: 16, color: danger ? Colors.red : MoonColors.text),
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 10, color: danger ? Colors.red : MoonColors.muted, fontWeight: FontWeight.w600)),
+      ]),
     ),
   );
 }

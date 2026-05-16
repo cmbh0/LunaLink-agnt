@@ -35,15 +35,23 @@ class _ConnectScreenState extends State<ConnectScreen> {
       const SizedBox(height: 10),
       TextField(controller: root, decoration: const InputDecoration(labelText: '默认远程目录')),
       const SizedBox(height: 18),
-      FilledButton.icon(
-        onPressed: state.busy ? null : () async {
-          final profile = ServerProfile(id: const Uuid().v4(), name: host.text, host: host.text.trim(), port: int.tryParse(port.text) ?? 22, username: user.text.trim(), password: pass.text, rootPath: root.text.trim().isEmpty ? '/' : root.text.trim());
-          await context.read<AppState>().connect(profile);
-          if (context.mounted && !widget.fullPage) Navigator.maybePop(context);
-        },
-        icon: state.busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.link_rounded),
-        label: const Text('连接并读取服务器信息'),
-      ),
+FilledButton.icon(
+         onPressed: state.busy ? null : () async {
+           final profile = ServerProfile(id: const Uuid().v4(), name: host.text, host: host.text.trim(), port: int.tryParse(port.text) ?? 22, username: user.text.trim(), password: pass.text, rootPath: root.text.trim().isEmpty ? '/' : root.text.trim());
+           await context.read<AppState>().connect(profile, persistAutoReconnect: state.autoReconnect);
+           if (context.mounted && !widget.fullPage) Navigator.maybePop(context);
+         },
+         icon: state.busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.link_rounded),
+         label: const Text('连接并读取服务器信息'),
+       ),
+       CheckboxListTile(
+         contentPadding: EdgeInsets.zero,
+         value: state.autoReconnect,
+         onChanged: (v) => context.read<AppState>().setAutoReconnect(v ?? false),
+         title: const Text('下次启动自动连接此服务器'),
+         subtitle: const Text('默认关闭；只有勾选后再连接才会自动重连。'),
+       ),
+       if (state.activeServerId != null) Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => context.read<AppState>().disconnectServer(), icon: const Icon(Icons.link_off_rounded), label: const Text('断开并关闭自动连接'))),
       const SizedBox(height: 18),
       if (state.servers.isNotEmpty) ...[
         const SizedBox(height: 12),
@@ -52,7 +60,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
           leading: Icon(state.activeServerId == s.id ? Icons.cloud_done_rounded : Icons.cloud_queue_rounded),
           title: Text(s.name),
           subtitle: Text('${s.username}@${s.host}:${s.port} · ${s.rootPath}'),
-          trailing: state.activeServerId == s.id ? const Text('当前') : TextButton(onPressed: () => context.read<AppState>().switchServer(s.id), child: const Text('切换')),
+          trailing: state.activeServerId == s.id ? const Text('当前') : TextButton(onPressed: () => context.read<AppState>().switchServer(s.id), child: const Text('连接')),
         )),
       ],
       if (state.serverInfo != null) _InfoCard(info: state.serverInfo!),

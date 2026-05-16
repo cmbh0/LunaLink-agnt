@@ -16,7 +16,7 @@ class LunaLinkApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'LunaLink Agent',
-        theme: MoonTheme.dark,
+        theme: MoonTheme.light,
         onGenerateRoute: (settings) => PageRouteBuilder<void>(
           settings: settings,
           transitionDuration: const Duration(milliseconds: 260),

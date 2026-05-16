@@ -10,7 +10,7 @@ on:
       build_mode:
         description: 'APK build mode'
         required: true
-        default: 'debug'
+        default: 'release'
         type: choice
         options:
           - debug
@@ -63,16 +63,17 @@ jobs:
       - name: Build APK
         shell: bash
         run: |
-          MODE="${{ github.event.inputs.build_mode || 'debug' }}"
-          if [ "$MODE" = "release" ]; then
-            flutter build apk --release
-          else
-            flutter build apk --debug
+          rm -f build/app/outputs/flutter-apk/*.apk
+          flutter build apk --release
+          test -f build/app/outputs/flutter-apk/app-release.apk
+          if unzip -p build/app/outputs/flutter-apk/app-release.apk AndroidManifest.xml | strings | grep -q 'android:debuggable="true"'; then
+            echo "Release APK is debuggable; refusing to upload."
+            exit 1
           fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LunaLink-agnt-${{ github.event.inputs.build_mode || 'debug' }}-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          name: LunaLink-agnt-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error

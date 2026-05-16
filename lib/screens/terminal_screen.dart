@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
-import '../theme/moon_theme.dart';
 
 class TerminalScreen extends StatefulWidget {
   const TerminalScreen({super.key});
@@ -25,31 +24,25 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        child: Row(children: [
-          const Icon(Icons.terminal_rounded, color: MoonColors.ok),
-          const SizedBox(width: 8),
-          const Expanded(child: Text('模拟终端 / AI 指令回显', style: TextStyle(fontWeight: FontWeight.bold))),
-          IconButton(onPressed: () => context.read<AppState>().clearTerminalLogs(), icon: const Icon(Icons.cleaning_services_rounded)),
-        ]),
-      ),
-      if (running) const LinearProgressIndicator(minHeight: 2),
-      Expanded(child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: Colors.black.withOpacity(.55), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
-        child: ListView(children: state.terminalLogs.map((e) => Text(e, style: const TextStyle(fontFamily: 'monospace', color: MoonColors.ok, height: 1.35))).toList()),
-      )),
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(children: [
-          Expanded(child: TextField(controller: input, decoration: const InputDecoration(hintText: '输入 SSH 命令，例如: pwd && ls -la'))),
-          const SizedBox(width: 8),
-          IconButton.filled(onPressed: running ? null : _run, icon: const Icon(Icons.play_arrow_rounded)),
-        ]),
-      ),
-    ]);
+    return Scaffold(
+      appBar: AppBar(title: const Text('SSH 终端')),
+      body: SafeArea(child: Column(children: [
+        if (running) const LinearProgressIndicator(minHeight: 2),
+        Expanded(child: Container(
+          margin: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFF1E1E2E), borderRadius: BorderRadius.circular(14)),
+          child: ListView(children: state.terminalLogs.map((e) => Text(e, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Color(0xFF89DCEB), height: 1.4))).toList()),
+        )),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          child: Row(children: [
+            Expanded(child: TextField(controller: input, style: const TextStyle(fontSize: 13), decoration: const InputDecoration(hintText: '输入命令...', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10)))),
+            const SizedBox(width: 8),
+            IconButton.filled(onPressed: running ? null : _run, icon: const Icon(Icons.play_arrow_rounded, size: 20)),
+          ]),
+        ),
+      ])),
+    );
   }
 }

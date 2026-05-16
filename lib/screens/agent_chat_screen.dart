@@ -50,21 +50,24 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    return Column(children: [
-      _TopBar(onSettings: () => _showAiConfig(context)),
-      if (state.busy) const LinearProgressIndicator(minHeight: 2),
-      Expanded(
-        child: state.messages.isEmpty
-            ? const _HeroEmpty()
-            : ListView.builder(
-                controller: scroll,
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-                itemCount: state.messages.length,
-                itemBuilder: (context, i) =>
-                    _Bubble(message: state.messages[i], onRollback: (t) => input.text = t),
-              ),
-      ),
-      _Composer(controller: input, onSend: _send),
+    return Stack(children: [
+      Column(children: [
+        _TopBar(onSettings: () => _showAiConfig(context)),
+        if (state.busy) const LinearProgressIndicator(minHeight: 2),
+        Expanded(
+          child: state.messages.isEmpty
+              ? const _HeroEmpty()
+              : ListView.builder(
+                  controller: scroll,
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                  itemCount: state.messages.length,
+                  itemBuilder: (context, i) =>
+                      _Bubble(message: state.messages[i], onRollback: (t) => input.text = t),
+                ),
+        ),
+        _Composer(controller: input, onSend: _send),
+      ]),
+      const _LiveCodeOverlay(),
     ]);
   }
 
@@ -81,7 +84,7 @@ class AiConfigPage extends StatefulWidget {
 }
 
 class _AiConfigPageState extends State<AiConfigPage> {
-  late TextEditingController endpoint, name, model, key, temp, maxTokens;
+  late TextEditingController endpoint, name, model, key, temp, maxTokens, summaryThreshold;
   late AiApiMode apiMode;
   late bool stream;
   String? testResult;
@@ -98,6 +101,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
     key = TextEditingController(text: cfg.apiKey);
     temp = TextEditingController(text: cfg.temperature.toString());
     maxTokens = TextEditingController(text: cfg.maxTokens.toString());
+    summaryThreshold = TextEditingController(text: cfg.summaryThreshold.toString());
     apiMode = cfg.apiMode;
     stream = cfg.streamOutput;
     endpoint.addListener(() => setState(() {}));
@@ -106,7 +110,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
   @override
   void dispose() {
     endpoint.dispose(); name.dispose(); model.dispose(); key.dispose();
-    temp.dispose(); maxTokens.dispose();
+    temp.dispose(); maxTokens.dispose(); summaryThreshold.dispose();
     super.dispose();
   }
 
@@ -150,8 +154,16 @@ class _AiConfigPageState extends State<AiConfigPage> {
           child: Text('实际请求地址：$_resolvedUrl', style: const TextStyle(fontSize: 11, color: MoonColors.muted)),
         ),
         _field(model, '模型 ID', hint: 'gpt-4o / deepseek-chat / ...'),
+        if (cfg.enabledModels.isNotEmpty) Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Wrap(spacing: 6, runSpacing: 6, children: cfg.enabledModels.map((m) => _TinyChip(label: m, selected: m == model.text.trim(), onTap: () => setState(() => model.text = m))).toList()),
+        ),
         _field(key, 'API Key', obscure: true),
         Row(children: [Expanded(child: _field(temp, 'Temperature')), const SizedBox(width: 8), Expanded(child: _field(maxTokens, 'Max Tokens'))]),
+        _label('记忆总结'),
+        _field(summaryThreshold, '每多少条用户消息自动总结', hint: '例如 12'),
+        const Text('总结使用当前配置与模型。达到阈值后会把上下文压缩为一条 summary 记忆，用于延长上下文。', style: TextStyle(fontSize: 11, color: MoonColors.muted, height: 1.35)),
+        const SizedBox(height: 8),
         SwitchListTile(dense: true, contentPadding: EdgeInsets.zero, value: stream, onChanged: (v) => setState(() => stream = v), title: const Text('流式输出 (SSE)', style: TextStyle(fontSize: 14)), subtitle: const Text('若一直等待无内容，可关闭后重试；错误会直接显示在气泡里。')),
         if (testResult != null) Container(margin: const EdgeInsets.only(top: 4, bottom: 8), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(10), border: Border.all(color: MoonColors.edge)), child: SelectableText(testResult!, style: const TextStyle(fontSize: 12, color: MoonColors.text))),
         const SizedBox(height: 10),
@@ -180,6 +192,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
       model: model.text.trim().isEmpty ? cfg.model : model.text.trim(),
       availableModels: cfg.availableModels,
       enabledModels: cfg.enabledModels,
+      summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
       streamOutput: stream,
       temperature: double.tryParse(temp.text) ?? .2,
       maxTokens: int.tryParse(maxTokens.text) ?? 4096,
@@ -210,6 +223,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
       key.text = cfg.apiKey;
       temp.text = cfg.temperature.toString();
       maxTokens.text = cfg.maxTokens.toString();
+      summaryThreshold.text = cfg.summaryThreshold.toString();
       apiMode = cfg.apiMode;
       stream = cfg.streamOutput;
       });
@@ -227,6 +241,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
       model: model.text.trim().isEmpty ? cfg.model : model.text.trim(),
       availableModels: cfg.availableModels,
       enabledModels: cfg.enabledModels,
+      summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
       streamOutput: stream,
       temperature: double.tryParse(temp.text) ?? .2,
       maxTokens: int.tryParse(maxTokens.text) ?? 4096,
@@ -252,15 +267,91 @@ class _AiConfigPageState extends State<AiConfigPage> {
     try {
       final models = await context.read<AppState>().fetchModelsFor(_draftConfig());
       if (!mounted) return;
-      setState(() {
-        testResult = models.isEmpty ? '未获取到模型列表。' : '模型列表：\n${models.take(30).join('\n')}';
-        if (models.isNotEmpty && model.text.trim().isEmpty) model.text = models.first;
-      });
+      if (models.isEmpty) {
+        setState(() => testResult = '未获取到模型列表。');
+        return;
+      }
+      await _showModelPicker(models);
     } catch (e) {
       if (mounted) setState(() => testResult = '❌ $e');
     } finally {
       if (mounted) setState(() => fetchingModels = false);
     }
+  }
+
+  Future<void> _showModelPicker(List<String> models) async {
+    final state = context.read<AppState>();
+    final cfg = state.activeAiConfig;
+    final selected = <String>{...cfg.enabledModels};
+    if (selected.isEmpty && model.text.trim().isNotEmpty) selected.add(model.text.trim());
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(builder: (context, setSheet) => Container(
+        height: MediaQuery.sizeOf(context).height * .72,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('选择可用模型', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          ]),
+          const SizedBox(height: 4),
+          const Text('勾选后会保存为输入框可快速切换的模型。', style: TextStyle(fontSize: 12, color: MoonColors.muted)),
+          const SizedBox(height: 10),
+          Expanded(child: ListView.builder(
+            itemCount: models.length,
+            itemBuilder: (_, i) {
+              final m = models[i];
+              final checked = selected.contains(m);
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => setSheet(() => checked ? selected.remove(m) : selected.add(m)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    decoration: BoxDecoration(color: checked ? const Color(0xFFF2EEFF) : MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: checked ? MoonColors.accent : MoonColors.edge)),
+                    child: Row(children: [
+                      Icon(checked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: 19, color: checked ? MoonColors.accent : MoonColors.muted),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(m, style: const TextStyle(fontSize: 13))),
+                    ]),
+                  ),
+                ),
+              );
+            },
+          )),
+          FilledButton(
+            onPressed: () async {
+              final enabled = selected.toList();
+              final chosen = enabled.isNotEmpty ? enabled.first : model.text.trim();
+              model.text = chosen;
+              await state.saveAiConfig(AiServiceConfig(
+                id: cfg.id,
+                name: name.text.trim().isEmpty ? cfg.name : name.text.trim(),
+                provider: cfg.provider,
+                endpoint: endpoint.text.trim(),
+                apiKey: key.text,
+                model: chosen,
+                availableModels: models,
+                enabledModels: enabled,
+                summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
+                streamOutput: stream,
+                temperature: double.tryParse(temp.text) ?? .2,
+                maxTokens: int.tryParse(maxTokens.text) ?? 4096,
+                apiMode: apiMode,
+                permissionMode: state.permissionMode,
+              ));
+              if (context.mounted) Navigator.pop(context);
+              if (mounted) setState(() => testResult = '已保存 ${enabled.length} 个可切换模型。');
+            },
+            child: const Text('保存选择'),
+          ),
+        ]),
+      )),
+    );
   }
 
   Widget _field(TextEditingController c, String label, {bool obscure = false, String? hint}) => Padding(
@@ -270,10 +361,74 @@ class _AiConfigPageState extends State<AiConfigPage> {
 
   Widget _label(String t) => Padding(padding: const EdgeInsets.only(top: 8, bottom: 6), child: Text(t, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: MoonColors.muted)));
 
-  Widget _dropdown<T>({required T value, required List<DropdownMenuItem<T>> items, required ValueChanged<T?> onChanged}) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
-    child: DropdownButtonHideUnderline(child: DropdownButton<T>(value: value, isExpanded: true, isDense: true, items: items, onChanged: onChanged, style: const TextStyle(fontSize: 13, color: MoonColors.text))),
+  Widget _dropdown<T>({required T value, required List<DropdownMenuItem<T>> items, required ValueChanged<T?> onChanged}) {
+    final labels = <T, String>{};
+    for (final item in items) {
+      final child = item.child;
+      labels[item.value as T] = child is Text ? (child.data ?? '') : item.value.toString();
+    }
+    return _TinyDropdown<T>(value: value, labels: labels, onChanged: onChanged);
+  }
+}
+
+class _TinyDropdown<T> extends StatelessWidget {
+  final T value;
+  final Map<T, String> labels;
+  final ValueChanged<T?> onChanged;
+  const _TinyDropdown({required this.value, required this.labels, required this.onChanged});
+  @override
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(12),
+    onTap: () async {
+      final selected = await showModalBottomSheet<T>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) => Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+          child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: labels.entries.map((e) {
+            final active = e.key == value;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => Navigator.pop(context, e.key),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(color: active ? const Color(0xFFF2EEFF) : MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: active ? MoonColors.accent : MoonColors.edge)),
+                  child: Row(children: [Expanded(child: Text(e.value, style: TextStyle(fontSize: 13, fontWeight: active ? FontWeight.w700 : FontWeight.w500))), if (active) const Icon(Icons.check_rounded, size: 18, color: MoonColors.accent)]),
+                ),
+              ),
+            );
+          }).toList())),
+        ),
+      );
+      if (selected != null) onChanged(selected);
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
+      child: Row(children: [Expanded(child: Text(labels[value] ?? value.toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: MoonColors.text))), const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: MoonColors.muted)]),
+    ),
+  );
+}
+
+class _TinyChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TinyChip({required this.label, required this.selected, required this.onTap});
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Container(
+      constraints: const BoxConstraints(maxWidth: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(color: selected ? const Color(0xFFF2EEFF) : MoonColors.panel2, borderRadius: BorderRadius.circular(16), border: Border.all(color: selected ? MoonColors.accent : MoonColors.edge)),
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: selected ? MoonColors.accent : MoonColors.text, fontWeight: FontWeight.w600)),
+    ),
   );
 }
 
@@ -413,7 +568,17 @@ class _Bubble extends StatelessWidget {
               if (!isUser && message.modelLabel?.isNotEmpty == true) Padding(padding: const EdgeInsets.only(bottom: 3), child: Text(message.modelLabel!, style: const TextStyle(fontSize: 10, color: MoonColors.muted))),
               if (isLoadingAssistant) const _LoadingDots(),
               if (message.thinking?.isNotEmpty == true) _ThinkingBlock(thinking: message.thinking!, active: message.content.trim().isEmpty),
-              if (message.content.isNotEmpty) _MarkdownMsg(data: message.content),
+              if (message.content.isNotEmpty) MarkdownBody(
+                data: message.content,
+                selectable: false,
+                builders: {'code': _CodeBuilder()},
+                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                  p: const TextStyle(color: MoonColors.text, fontSize: 14, height: 1.45),
+                  code: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: MoonColors.accent, backgroundColor: Color(0xFFF5F2FF)),
+                  codeblockPadding: EdgeInsets.zero,
+                  codeblockDecoration: const BoxDecoration(color: Colors.transparent),
+                ),
+              ),
               for (final t in message.toolCalls) _ToolCard(call: t),
               for (final c in message.changes) _ChangeCard(change: c),
             ]),
@@ -428,11 +593,35 @@ Future<void> _showMessageActions(BuildContext context, AgentMessage message, Val
   final state = context.read<AppState>();
   final isUser = message.role == 'user';
   await showModalBottomSheet<void>(context: context, builder: (_) => SafeArea(child: Wrap(children: [
-    ListTile(dense: true, leading: const Icon(Icons.copy_rounded, size: 20), title: const Text('复制'), onTap: () { Clipboard.setData(ClipboardData(text: message.content)); Navigator.pop(context); }),
-    ListTile(dense: true, leading: const Icon(Icons.delete_outline_rounded, size: 20), title: const Text('删除'), onTap: () { state.deleteMessage(message.id); Navigator.pop(context); }),
+    ListTile(dense: true, leading: const Icon(Icons.copy_rounded, size: 20), title: const Text('复制全部'), onTap: () { Clipboard.setData(ClipboardData(text: message.content)); Navigator.pop(context); }),
+    ListTile(dense: true, leading: const Icon(Icons.select_all_rounded, size: 20), title: const Text('选择文本复制'), onTap: () { Navigator.pop(context); _showSelectableTextDialog(context, message.content); }),
+    ListTile(dense: true, leading: const Icon(Icons.undo_rounded, size: 20), title: const Text('回滚到这里'), onTap: () { final t = state.rollbackToMessage(message.id); if (t != null) onRollback?.call(t); Navigator.pop(context); }),
+    ListTile(dense: true, leading: const Icon(Icons.delete_outline_rounded, size: 20), title: const Text('删除此处及后续'), onTap: () { state.deleteMessage(message.id); Navigator.pop(context); }),
     if (!isUser) ListTile(dense: true, leading: const Icon(Icons.refresh_rounded, size: 20), title: const Text('重新生成'), onTap: () { Navigator.pop(context); state.regenerateAfter(message.id); }),
-    if (isUser) ListTile(dense: true, leading: const Icon(Icons.edit_rounded, size: 20), title: const Text('编辑并重发'), onTap: () { onRollback?.call(message.content); state.deleteMessage(message.id); Navigator.pop(context); }),
+    if (isUser) ListTile(dense: true, leading: const Icon(Icons.edit_rounded, size: 20), title: const Text('编辑并重发'), onTap: () { final t = state.editAndResend(message.id); if (t != null) onRollback?.call(t); Navigator.pop(context); }),
   ])));
+}
+
+Future<void> _showSelectableTextDialog(BuildContext context, String text) async {
+  await showDialog<void>(
+    context: context,
+    builder: (_) => Dialog(
+      insetPadding: const EdgeInsets.all(18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .72),
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(child: Text('选择文本复制', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+          ]),
+          const SizedBox(height: 8),
+          Expanded(child: SingleChildScrollView(child: SelectableText(text, style: const TextStyle(fontSize: 14, height: 1.45)))),
+        ]),
+      ),
+    ),
+  );
 }
 
 // ─── Thinking ───
@@ -471,52 +660,30 @@ class _ThinkingBlock extends StatefulWidget {
 }
 
 class _ThinkingBlockState extends State<_ThinkingBlock> with SingleTickerProviderStateMixin {
-  late final AnimationController pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+  late final AnimationController pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
   bool open = false;
   @override
   void dispose() { pulse.dispose(); super.dispose(); }
-
-  String get preview {
-    final oneLine = widget.thinking.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (oneLine.isEmpty) return widget.active ? '正在思考' : '思考过程';
-    return oneLine.length > 42 ? '${oneLine.substring(0, 42)}…' : oneLine;
-  }
-
   @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 180),
-    margin: const EdgeInsets.only(bottom: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF7F8FC),
-      borderRadius: BorderRadius.circular(13),
-      border: Border.all(color: MoonColors.edge.withOpacity(.75)),
-    ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      InkWell(
+      GestureDetector(
         onTap: () => setState(() => open = !open),
-        borderRadius: BorderRadius.circular(10),
-        child: Row(children: [
-          FadeTransition(
-            opacity: Tween<double>(begin: .45, end: 1.0).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut)),
-            child: Text(widget.active ? '正在思考' : '思考', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: MoonColors.muted)),
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: MoonColors.muted))),
-          Icon(open ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, size: 16, color: MoonColors.muted),
-        ]),
-      ),
-      AnimatedCrossFade(
-        firstChild: const SizedBox.shrink(),
-        secondChild: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: MoonColors.edge.withOpacity(.7))),
-          child: SelectableText(widget.thinking, style: const TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.45)),
+        child: FadeTransition(
+          opacity: Tween<double>(begin: .4, end: 1.0).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 14, color: MoonColors.muted),
+            const SizedBox(width: 3),
+            Text(widget.active ? '正在思考...' : '思考过程', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: MoonColors.muted)),
+          ]),
         ),
-        crossFadeState: open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-        duration: const Duration(milliseconds: 180),
+      ),
+      if (open) Container(
+        margin: const EdgeInsets.only(left: 6, top: 4),
+        padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
+        decoration: const BoxDecoration(border: Border(left: BorderSide(color: MoonColors.edge, width: 1.2))),
+        child: Text(widget.thinking, style: const TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.4)),
       ),
     ]),
   );
@@ -575,10 +742,10 @@ class _HoverCopyCodeBlockState extends State<_HoverCopyCodeBlock> {
           decoration: BoxDecoration(color: const Color(0xFFF7F4FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2D8FF))),
           child: SelectableText(widget.text, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: MoonColors.text, height: 1.35)),
         ),
-        Positioned(
+        const Positioned(
           top: 10,
           left: 10,
-          child: const Text('code', style: TextStyle(fontSize: 10, color: MoonColors.muted)),
+          child: Text('code', style: TextStyle(fontSize: 10, color: MoonColors.muted)),
         ),
         Positioned(
           top: 8,
@@ -643,22 +810,13 @@ class _PermissionDropdown extends StatelessWidget {
   final ToolPermissionMode value;
   const _PermissionDropdown({required this.value});
   @override
-  Widget build(BuildContext context) => Container(
-    height: 30,
-    padding: const EdgeInsets.symmetric(horizontal: 8),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
-    child: DropdownButtonHideUnderline(child: DropdownButton<ToolPermissionMode>(
-      value: value,
-      isExpanded: true,
-      isDense: true,
-      items: const [
-        DropdownMenuItem(value: ToolPermissionMode.askEveryTime, child: Text('每次询问')),
-        DropdownMenuItem(value: ToolPermissionMode.autoReadOnly, child: Text('自动只读')),
-        DropdownMenuItem(value: ToolPermissionMode.autoAll, child: Text('全部批准')),
-      ],
-      onChanged: (v) { if (v != null) context.read<AppState>().setPermissionMode(v); },
-      style: const TextStyle(fontSize: 11, color: MoonColors.text),
-    )),
+  Widget build(BuildContext context) => _TinyDropdown<ToolPermissionMode>(
+    value: value,
+    labels: const {
+      ToolPermissionMode.askEveryTime: '每次询问',
+      ToolPermissionMode.autoAll: '自动批准',
+    },
+    onChanged: (v) { if (v != null) context.read<AppState>().setPermissionMode(v); },
   );
 }
 
@@ -699,7 +857,13 @@ class _Composer extends StatelessWidget {
     final serverLabel = _serverName(state);
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-      child: Container(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
+        if (state.agentMode == AgentMode.code && state.todoPlan != null && !state.todoPlan!.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 8, bottom: 5),
+            child: _TodoCapsule(plan: state.todoPlan!),
+          ),
+        Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 16, offset: const Offset(0, 5))]),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -712,7 +876,7 @@ class _Composer extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            _ModelPill(label: cfg.model, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiConfigPage()))),
+            _ModelPill(label: cfg.model, onTap: () => _showQuickModelSwitch(context, state, cfg)),
             const SizedBox(width: 6),
             _ComposerPill(icon: Icons.cloud_outlined, label: serverLabel, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ConnectScreen(fullPage: true)))),
             const SizedBox(width: 6),
@@ -722,7 +886,106 @@ class _Composer extends StatelessWidget {
           ]),
         ]),
       ),
+      ]),
     );
+  }
+}
+
+class _TodoCapsule extends StatelessWidget {
+  final AgentTodoPlan plan;
+  const _TodoCapsule({required this.plan});
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: () => _showTodoSheet(context, plan),
+    borderRadius: BorderRadius.circular(18),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(color: const Color(0xFFEFF7FF), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFB9DFFF)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 10, offset: const Offset(0, 3))]),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.checklist_rounded, size: 14, color: Color(0xFF3487C8)),
+        const SizedBox(width: 5),
+        Text('${plan.doneCount}/${plan.totalCount}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF256EA8))),
+      ]),
+    ),
+  );
+}
+
+Future<void> _showTodoSheet(BuildContext context, AgentTodoPlan plan) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('任务目标', style: TextStyle(fontSize: 12, color: MoonColors.muted, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 5),
+        Text(plan.goal.isEmpty ? '当前 Code 任务' : plan.goal, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 12),
+        Text('进度：${plan.doneCount} / ${plan.totalCount}', style: const TextStyle(fontSize: 12, color: MoonColors.muted)),
+        const SizedBox(height: 8),
+        Flexible(child: ListView.builder(shrinkWrap: true, itemCount: plan.items.length, itemBuilder: (_, i) {
+          final item = plan.items[i];
+          final icon = item.done ? Icons.check_circle_rounded : item.active ? Icons.timelapse_rounded : Icons.radio_button_unchecked_rounded;
+          final color = item.done ? MoonColors.ok : item.active ? MoonColors.accent : MoonColors.muted;
+          final label = item.done ? '已完成' : item.active ? '正在进行' : '未完成';
+          return Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)), Text(label, style: TextStyle(fontSize: 11, color: color))])),
+          ]));
+        })),
+      ])),
+    ),
+  );
+}
+
+Future<void> _showQuickModelSwitch(BuildContext context, AppState state, AiServiceConfig cfg) async {
+  final models = cfg.enabledModels.isNotEmpty ? cfg.enabledModels : [cfg.model];
+  final selected = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Padding(padding: EdgeInsets.fromLTRB(4, 4, 4, 10), child: Text('切换模型', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+        for (final m in models) Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.pop(context, m),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(color: m == cfg.model ? const Color(0xFFF2EEFF) : MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: m == cfg.model ? MoonColors.accent : MoonColors.edge)),
+              child: Row(children: [Expanded(child: Text(m, style: const TextStyle(fontSize: 13))), if (m == cfg.model) const Icon(Icons.check_rounded, size: 18, color: MoonColors.accent)]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextButton.icon(onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const AiConfigPage())); }, icon: const Icon(Icons.tune_rounded, size: 17), label: const Text('管理模型配置')),
+      ])),
+    ),
+  );
+  if (selected != null && selected != cfg.model) {
+    await state.saveAiConfig(AiServiceConfig(
+      id: cfg.id,
+      name: cfg.name,
+      provider: cfg.provider,
+      endpoint: cfg.endpoint,
+      apiKey: cfg.apiKey,
+      model: selected,
+      availableModels: cfg.availableModels,
+      enabledModels: cfg.enabledModels,
+      summaryThreshold: cfg.summaryThreshold,
+      streamOutput: cfg.streamOutput,
+      temperature: cfg.temperature,
+      maxTokens: cfg.maxTokens,
+      headers: cfg.headers,
+      apiMode: cfg.apiMode,
+      permissionMode: cfg.permissionMode,
+    ));
   }
 }
 
@@ -732,6 +995,145 @@ String _serverName(AppState state) {
     if (s.id == state.activeServerId) return s.name;
   }
   return 'Cloud';
+}
+
+class _LiveCodeOverlay extends StatefulWidget {
+  const _LiveCodeOverlay();
+  @override
+  State<_LiveCodeOverlay> createState() => _LiveCodeOverlayState();
+}
+
+class _LiveCodeOverlayState extends State<_LiveCodeOverlay> {
+  Offset pos = const Offset(18, 96);
+  Size size = const Size(320, 360);
+  bool minimized = false;
+  bool showDiff = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final change = context.watch<AppState>().liveCodeChange;
+    if (change == null) return const SizedBox.shrink();
+    final screen = MediaQuery.sizeOf(context);
+    if (minimized) {
+      return Positioned(
+        left: pos.dx.clamp(0, screen.width - 56),
+        top: pos.dy.clamp(0, screen.height - 56),
+        child: GestureDetector(
+          onPanUpdate: (d) => setState(() => pos += d.delta),
+          onTap: () => setState(() => minimized = false),
+          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Text('◐', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)))),
+        ),
+      );
+    }
+    final w = size.width.clamp(260, screen.width - 20).toDouble();
+    final h = size.height.clamp(240, screen.height - 90).toDouble();
+    return Positioned(
+      left: pos.dx.clamp(8, screen.width - w - 8),
+      top: pos.dy.clamp(8, screen.height - h - 8),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(color: Colors.white.withOpacity(.97), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 24, offset: const Offset(0, 10))]),
+          child: Stack(children: [
+            Column(children: [
+              GestureDetector(
+                onPanUpdate: (d) => setState(() => pos += d.delta),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 9, 8, 8),
+                  decoration: const BoxDecoration(color: Color(0xFFF6F3FF), borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+                  child: Row(children: [
+                    const Text('◐ AI 正在编码', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.accent)),
+                    const Spacer(),
+                    IconButton(onPressed: () => setState(() => minimized = true), icon: const Icon(Icons.remove_rounded, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28)),
+                    IconButton(onPressed: () => context.read<AppState>().clearLiveCodeChange(), icon: const Icon(Icons.close_rounded, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28)),
+                  ]),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 5),
+                child: Row(children: [
+                  Icon(_fileIcon(change.fileName), size: 16, color: MoonColors.accent),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(change.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                  Text('(+${change.addedLines} -${change.removedLines}, ${change.byteDelta >= 0 ? '+' : ''}${change.byteDelta}B)', style: const TextStyle(fontSize: 10.5, color: MoonColors.muted)),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(children: [
+                  _LiveTab(label: '代码', selected: !showDiff, onTap: () => setState(() => showDiff = false)),
+                  const SizedBox(width: 8),
+                  _LiveTab(label: 'Diff', selected: showDiff, onTap: () => setState(() => showDiff = true)),
+                ]),
+              ),
+              Expanded(child: Container(
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: const Color(0xFFFBFAFF), borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
+                child: SingleChildScrollView(child: showDiff ? _DiffView(oldText: change.oldText, newText: change.newText) : SelectableText(change.newText, style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, height: 1.35))),
+              )),
+            ]),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: GestureDetector(
+                onPanUpdate: (d) => setState(() => size = Size(size.width + d.delta.dx, size.height + d.delta.dy)),
+                child: Container(width: 28, height: 28, alignment: Alignment.bottomRight, padding: const EdgeInsets.all(4), child: const Icon(Icons.drag_handle_rounded, size: 18, color: MoonColors.muted)),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  IconData _fileIcon(String name) {
+    if (name.endsWith('.dart')) return Icons.flutter_dash_rounded;
+    if (name.endsWith('.json') || name.endsWith('.yaml') || name.endsWith('.yml')) return Icons.data_object_rounded;
+    if (name.endsWith('.md')) return Icons.article_outlined;
+    return Icons.insert_drive_file_outlined;
+  }
+}
+
+class _LiveTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _LiveTab({required this.label, required this.selected, required this.onTap});
+  @override
+  Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(14), child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: selected ? MoonColors.accent.withOpacity(.12) : MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: selected ? MoonColors.accent.withOpacity(.35) : MoonColors.edge)), child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: selected ? MoonColors.accent : MoonColors.muted))));
+}
+
+class _DiffView extends StatelessWidget {
+  final String oldText;
+  final String newText;
+  const _DiffView({required this.oldText, required this.newText});
+  @override
+  Widget build(BuildContext context) {
+    final oldLines = oldText.isEmpty ? <String>[] : oldText.split('\n');
+    final newLines = newText.isEmpty ? <String>[] : newText.split('\n');
+    var prefix = 0;
+    while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] == newLines[prefix]) { prefix++; }
+    var oldSuffix = oldLines.length - 1;
+    var newSuffix = newLines.length - 1;
+    while (oldSuffix >= prefix && newSuffix >= prefix && oldLines[oldSuffix] == newLines[newSuffix]) { oldSuffix--; newSuffix--; }
+    final spans = <Widget>[];
+    for (var i = 0; i < prefix && i < 20; i++) { spans.add(_DiffLine('  ${oldLines[i]}', MoonColors.text)); }
+    for (var i = prefix; i <= oldSuffix; i++) { if (i >= 0 && i < oldLines.length) spans.add(_DiffLine('- ${oldLines[i]}', MoonColors.danger)); }
+    for (var i = prefix; i <= newSuffix; i++) { if (i >= 0 && i < newLines.length) spans.add(_DiffLine('+ ${newLines[i]}', MoonColors.ok)); }
+    for (var i = newSuffix + 1; i < newLines.length && spans.length < 80; i++) { spans.add(_DiffLine('  ${newLines[i]}', MoonColors.text)); }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: spans.isEmpty ? const [Text('无可显示 diff')] : spans);
+  }
+}
+
+class _DiffLine extends StatelessWidget {
+  final String text;
+  final Color color;
+  const _DiffLine(this.text, this.color);
+  @override
+  Widget build(BuildContext context) => Text(text, style: TextStyle(fontFamily: 'monospace', fontSize: 11.5, height: 1.35, color: color));
 }
 
 class _ModelPill extends StatelessWidget {

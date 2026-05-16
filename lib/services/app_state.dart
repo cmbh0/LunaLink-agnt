@@ -32,6 +32,11 @@ class AppState extends ChangeNotifier {
   bool busy = false;
   String conversationId = 'default_conversation';
   ToolPermissionMode permissionMode = ToolPermissionMode.askEveryTime;
+  AgentTodoPlan? todoPlan;
+  FileChangeRecord? liveCodeChange;
+  int _agentLoopRound = 0;
+  bool _agentLoopRunning = false;
+  static const int _maxAgentLoopRounds = 12;
   String? selectedAiConfigId;
 
   AppState() {
@@ -93,6 +98,8 @@ class AppState extends ChangeNotifier {
   Future<void> newConversation() async {
     conversationId = const Uuid().v4();
     messages.clear();
+    todoPlan = null;
+    liveCodeChange = null;
     conversations.insert(0, ConversationMeta(id: conversationId, title: '新话题 ${conversations.length + 1}', updatedAt: DateTime.now()));
     await _saveConversations();
     notifyListeners();
@@ -133,6 +140,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> moveConversationDown(String id) async {
+    final index = conversations.indexWhere((e) => e.id == id);
+    if (index < 0 || index >= conversations.length - 1) return;
+    final item = conversations.removeAt(index);
+    conversations.insert(index + 1, item);
+    await _saveConversations();
+    notifyListeners();
+  }
+
   Future<void> switchConversation(String id) async {
     conversationId = id;
     await store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList(), 'activeConversationId': conversationId});
@@ -144,15 +160,19 @@ class AppState extends ChangeNotifier {
 
   Future<void> _loadConversationMessages(String id) async {
     final doc = await store.readMap('memory', id, fallback: {'events': <dynamic>[]});
+    final planDoc = doc['todoPlan'];
+    todoPlan = planDoc is Map ? AgentTodoPlan.fromJson(Map<String, dynamic>.from(planDoc)) : null;
     messages
       ..clear()
-      ..addAll((doc['events'] as List? ?? []).whereType<Map>().where((e) => e['type'] == 'message').map((e) => AgentMessage(
+      ..addAll((doc['events'] as List? ?? []).whereType<Map>().where((e) => e['type'] == 'message' || e['type'] == 'summary').map((e) => AgentMessage(
             id: e['id'] as String? ?? const Uuid().v4(),
-            role: e['role'] as String? ?? 'assistant',
-            content: e['content'] as String? ?? '',
+            role: e['type'] == 'summary' ? 'assistant' : (e['role'] as String? ?? 'assistant'),
+            content: e['type'] == 'summary' ? '【上下文总结】\n${e['content'] as String? ?? ''}' : (e['content'] as String? ?? ''),
             createdAt: DateTime.tryParse(e['at'] as String? ?? '') ?? DateTime.now(),
             thinking: e['thinking'] as String?,
             modelLabel: e['modelLabel'] as String?,
+            toolCalls: (e['toolCalls'] as List? ?? const []).whereType<Map>().map((t) => ToolCallRecord.fromJson(Map<String, dynamic>.from(t))).toList(),
+            changes: (e['changes'] as List? ?? const []).whereType<Map>().map((c) => FileChangeRecord.fromJson(Map<String, dynamic>.from(c))).toList(),
           )));
   }
 
@@ -317,19 +337,30 @@ Future<void> runTerminalCommand(String command) async {
     notifyListeners();
   }
 
+  void clearLiveCodeChange() {
+    liveCodeChange = null;
+    notifyListeners();
+  }
+
   Future<void> sendAgentTask(String content) async {
+    if (generationActive || busy) return;
+    _agentLoopRound = 0;
+    await _requestAgentTurn(content, isContinuation: false);
+  }
+
+  Future<void> _requestAgentTurn(String content, {required bool isContinuation}) async {
     if (generationActive || busy) return;
     busy = true;
     generationActive = true;
     cancelRequested = false;
     notifyListeners();
 
-    addUserMessage(content);
+    if (!isContinuation) addUserMessage(content);
     final cfg = activeAiConfig;
     final modeGuide = agentMode == AgentMode.mtc
-        ? '当前是 MTC 方案沟通模式：必须真实回复用户，专注需求澄清、架构方案、UI/UX 设计和风险评估；默认不要执行工具调用，除非用户明确要求查询。'
-        : '当前是 Code 编码模式：可提出工具调用和文件变更建议。当前授权策略：${permissionMode.name}。';
-    final prompt = '$modeGuide\n当前远程目录：$currentPath\n用户任务：$content';
+        ? '当前是 MTC 方案沟通模式：只能聊天和整理需求，禁止输出 <tool> 或 <file_change>，禁止要求应用执行任何工具调用。你需要专注需求澄清、架构方案、UI/UX 设计和风险评估。'
+        : '当前是 Code 编码模式：必须按照持续 Agent 工作流推进：先规划 todo，再执行工具；工具结果会自动回传给你；todo 未全部 done 前必须继续下一步；全部 done 后输出最终总结并停止。当前授权策略：${permissionMode.name}。';
+    final prompt = '$modeGuide\n当前远程目录：$currentPath\n${isContinuation ? '系统继续请求：工具/文件操作结果已写入上文，请根据最新结果继续执行任务。如果目标完成，请输出全部 done 的 <todo> 和最终总结；如果未完成，请继续输出下一步需要的 <tool> 或 <file_change>。' : '用户任务：$content'}';
     final modelLabel = '${cfg.name} · ${cfg.model}';
     final id = addAssistantMessage('', modelLabel: modelLabel);
     activeAssistantMessageId = id;
@@ -340,10 +371,7 @@ Future<void> runTerminalCommand(String command) async {
       if (cfg.apiKey.trim().isEmpty) throw StateError('未配置 API Key。请进入 AI 配置填写密钥。');
 
       final systemPrompt = AgentSystemPrompt.build(hasGitHub: github.isConnected, permissionMode: permissionMode.name);
-      final req = [
-        {'role': 'system', 'content': systemPrompt},
-        {'role': 'user', 'content': prompt},
-      ];
+      final req = _buildAiRequest(systemPrompt, prompt, includeExistingCurrentUser: !isContinuation ? false : true);
 
       if (cfg.streamOutput) {
         var raw = '';
@@ -384,12 +412,73 @@ Future<void> runTerminalCommand(String command) async {
       activeAssistantMessageId = null;
       notifyListeners();
       await _rewriteMemoryFromMessages();
+      if (agentMode == AgentMode.code && !_agentLoopRunning) {
+        Future.microtask(_continueAgentLoopIfNeeded);
+      }
     }
+  }
+
+  List<Map<String, String>> _buildAiRequest(String systemPrompt, String currentPrompt, {bool includeExistingCurrentUser = true}) {
+    final source = includeExistingCurrentUser ? messages : messages.where((m) => !(m.role == 'user' && m.content == currentPrompt)).toList();
+    final history = source
+        .where((m) => m.content.trim().isNotEmpty || m.toolCalls.isNotEmpty || m.changes.isNotEmpty)
+        .map((m) {
+          final extra = <String>[];
+          for (final t in m.toolCalls) {
+            if ((t.output ?? '').trim().isNotEmpty || t.status != 'pending') {
+              extra.add('【工具 ${t.tool} / ${t.status}】\n参数: ${jsonEncode(t.arguments)}\n结果:\n${t.output ?? ''}');
+            }
+          }
+          for (final c in m.changes) {
+            extra.add('【文件变更 ${c.path} / ${c.status}】新增 ${c.addedLines} 行，删除 ${c.removedLines} 行，字节变化 ${c.byteDelta}');
+          }
+          final body = [m.content, ...extra].where((e) => e.trim().isNotEmpty).join('\n\n');
+          return {'role': m.role == 'user' ? 'user' : 'assistant', 'content': body};
+        })
+        .toList();
+    final capped = history.length > 24 ? history.sublist(history.length - 24) : history;
+    return [
+      {'role': 'system', 'content': systemPrompt},
+      ...capped,
+      {'role': 'user', 'content': currentPrompt},
+    ];
   }
 
   void cancelGeneration() {
     cancelRequested = true;
+    _agentLoopRound = _maxAgentLoopRounds;
     notifyListeners();
+  }
+
+  Future<void> _continueAgentLoopIfNeeded() async {
+    if (_agentLoopRunning || agentMode != AgentMode.code || busy || generationActive || cancelRequested) return;
+    if (_isTodoComplete) return;
+    if (!_hasActionNeedingContinuation) return;
+    if (_agentLoopRound >= _maxAgentLoopRounds) {
+      addAssistantMessage('已达到自动 Agent 最大连续轮数 $_maxAgentLoopRounds。为避免死循环，已暂停自动继续。你可以检查当前任务状态后手动发送“继续”。');
+      await _rewriteMemoryFromMessages();
+      return;
+    }
+    _agentLoopRunning = true;
+    try {
+      _agentLoopRound += 1;
+      await _requestAgentTurn('继续', isContinuation: true);
+    } finally {
+      _agentLoopRunning = false;
+    }
+  }
+
+  bool get _isTodoComplete => todoPlan != null && todoPlan!.items.isNotEmpty && todoPlan!.items.every((e) => e.done);
+
+  bool get _hasActionNeedingContinuation {
+    for (final m in messages.reversed.take(8)) {
+      final hasRunning = m.toolCalls.any((t) => t.status == 'running' || t.status == 'pending') || m.changes.any((c) => c.status == 'pending' || c.status == 'running');
+      if (hasRunning) return false;
+      final hasFinishedAction = m.toolCalls.any((t) => t.status == 'done' || t.status == 'error' || t.status == 'rejected') || m.changes.any((c) => c.status == 'saved' || c.status == 'error' || c.status == 'rejected');
+      if (hasFinishedAction) return true;
+      if (m.role == 'assistant' && m.content.trim().isNotEmpty) return false;
+    }
+    return false;
   }
 
   Future<void> executeTool(String toolCallId) async {
@@ -401,8 +490,15 @@ Future<void> runTerminalCommand(String command) async {
     try {
       switch (call.tool) {
         case 'ssh_exec':
-          output = await ssh.exec(call.arguments['command'] as String? ?? '');
+          final command = _requiredString(call, 'command', 'ls -la');
+          output = await ssh.exec(command);
+          terminalLogs.add('\$ $command');
           terminalLogs.add(output.trim().isEmpty ? '[no output]' : output);
+          break;
+        case 'terminal_wait':
+          final delay = call.arguments['delayMs'] is num ? (call.arguments['delayMs'] as num).toInt() : 1000;
+          await Future.delayed(Duration(milliseconds: delay.clamp(0, 30000)));
+          output = terminalLogs.take(80).join('\n');
           break;
         case 'list_files':
           final path = call.arguments['path'] as String? ?? currentPath;
@@ -410,22 +506,74 @@ Future<void> runTerminalCommand(String command) async {
           output = list.map((e) => '${e.isDirectory ? 'd' : '-'} ${e.name} ${e.size}').join('\n');
           break;
         case 'read_file':
-          final bytes = await ssh.readFile(call.arguments['path'] as String);
+          final bytes = await ssh.readFile(_requiredString(call, 'path', '/home/user/project/main.dart'));
           output = utf8.decode(bytes, allowMalformed: true);
           break;
         case 'write_file':
-          await writeRemoteTextWithBackup(call.arguments['path'] as String, call.arguments['content'] as String? ?? '');
+          final path = _requiredString(call, 'path', '/path/file');
+          final content = call.arguments['content'] as String? ?? '';
+          String old = '';
+          try { old = utf8.decode(await ssh.readFile(path), allowMalformed: true); } catch (_) {}
+          liveCodeChange = FileChangeRecord(id: call.id, path: path, oldText: old, newText: content, status: 'running');
+          notifyListeners();
+          await writeRemoteTextWithBackup(path, content);
+          liveCodeChange = FileChangeRecord(id: call.id, path: path, oldText: old, newText: content, status: 'saved');
           output = 'written with .bak backup';
           await refreshFiles();
           break;
+        case 'replace_file_text':
+          final path = _requiredString(call, 'path', '/path/file');
+          final oldText = _requiredString(call, 'oldText', '旧文本');
+          final newText = _requiredString(call, 'newText', '新文本');
+          final current = utf8.decode(await ssh.readFile(path), allowMalformed: true);
+          if (!current.contains(oldText)) throw StateError('oldText not found in file.');
+          final next = current.replaceFirst(oldText, newText);
+          liveCodeChange = FileChangeRecord(id: call.id, path: path, oldText: current, newText: next, status: 'running');
+          notifyListeners();
+          await writeRemoteTextWithBackup(path, next);
+          liveCodeChange = FileChangeRecord(id: call.id, path: path, oldText: current, newText: next, status: 'saved');
+          output = 'replaced text in $path';
+          await refreshFiles();
+          break;
+        case 'move_file':
+          await ssh.rename(_requiredString(call, 'from', '/old/path'), _requiredString(call, 'to', '/new/path'));
+          output = 'moved';
+          await refreshFiles();
+          break;
+        case 'delete_file':
+          await ssh.delete(_requiredString(call, 'path', '/path/file'), directory: call.arguments['directory'] == true);
+          output = 'deleted';
+          await refreshFiles();
+          break;
+        case 'mkdir':
+          await ssh.mkdir(_requiredString(call, 'path', '/path/dir'));
+          output = 'directory created';
+          await refreshFiles();
+          break;
+        case 'github_status':
+          output = github.isConnected ? 'GitHub token configured. Use github_verify_token to validate current user.' : 'GitHub token not configured.';
+          break;
+        case 'github_verify_token':
+          output = await testGitHubConnection();
+          break;
+        case 'github_list_repos':
+          output = await _githubRequest('GET', '/user/repos?visibility=${call.arguments['visibility'] ?? 'all'}&per_page=${call.arguments['per_page'] ?? 30}');
+          break;
+        case 'github_create_repo':
+          output = await _githubRequest('POST', '/user/repos', body: {
+            'name': _requiredString(call, 'name', 'my-project'),
+            'private': call.arguments['private'] != false,
+            if ((call.arguments['description'] as String?)?.isNotEmpty == true) 'description': call.arguments['description'],
+          });
+          break;
         case 'github_get_repo':
-          output = await _githubRequest('GET', '/repos/${call.arguments['owner']}/${call.arguments['repo']}');
+          output = await _githubRequest('GET', '/repos/${_requiredString(call, 'owner', 'user')}/${_requiredString(call, 'repo', 'repo')}');
           break;
         case 'github_create_or_update_file':
           output = await _githubCreateOrUpdateFile(
-            owner: call.arguments['owner'] as String,
-            repo: call.arguments['repo'] as String,
-            path: call.arguments['path'] as String,
+            owner: _requiredString(call, 'owner', 'user'),
+            repo: _requiredString(call, 'repo', 'repo'),
+            path: _requiredString(call, 'path', 'file.txt'),
             content: call.arguments['content'] as String? ?? '',
             message: call.arguments['message'] as String? ?? 'Update file from LunaLink Agent',
             branch: call.arguments['branch'] as String? ?? 'main',
@@ -433,25 +581,78 @@ Future<void> runTerminalCommand(String command) async {
           break;
         case 'github_dispatch_workflow':
           output = await _githubDispatchWorkflow(
-            owner: call.arguments['owner'] as String,
-            repo: call.arguments['repo'] as String,
+            owner: _requiredString(call, 'owner', 'user'),
+            repo: _requiredString(call, 'repo', 'repo'),
             workflow: call.arguments['workflow'] as String? ?? 'flutter_android_ci.yml',
             ref: call.arguments['ref'] as String? ?? 'main',
             inputs: Map<String, dynamic>.from(call.arguments['inputs'] as Map? ?? {'build_mode': 'release'}),
           );
           break;
         case 'github_list_runs':
-          output = await _githubRequest('GET', '/repos/${call.arguments['owner']}/${call.arguments['repo']}/actions/runs?per_page=${call.arguments['per_page'] ?? 5}');
+          output = await _githubRequest('GET', '/repos/${_requiredString(call, 'owner', 'user')}/${_requiredString(call, 'repo', 'repo')}/actions/runs?per_page=${call.arguments['per_page'] ?? 5}');
           break;
         default:
-          output = '未知工具：${call.tool}';
+          throw StateError('Unknown tool: ${call.tool}');
       }
       _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'done', output: output));
       await journal.append(conversationId: conversationId, event: {'type': 'tool', 'tool': call.tool, 'args': call.arguments, 'output': output});
     } catch (e) {
-      _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'error', output: '$e'));
-      if (call.tool == 'ssh_exec') terminalLogs.add('ERROR: $e');
+      final err = _toolErrorMessage(call, e);
+      _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'error', output: err));
+      if (call.tool == 'ssh_exec') terminalLogs.add('ERROR: $err');
+    } finally {
+      notifyListeners();
+      await _rewriteMemoryFromMessages();
+      if (agentMode == AgentMode.code) Future.microtask(_continueAgentLoopIfNeeded);
     }
+  }
+
+  String _requiredString(ToolCallRecord call, String key, String example) {
+    final value = call.arguments[key];
+    if (value is String && value.trim().isNotEmpty) return value;
+    throw StateError('Missing required parameter `$key`. Example: ${jsonEncode({'tool': call.tool, 'arguments': {key: example}})}');
+  }
+
+  String _toolErrorMessage(ToolCallRecord call, Object error) => '''English:
+Tool call failed.
+Tool: ${call.tool}
+Arguments: ${jsonEncode(call.arguments)}
+Reason: $error
+Please call the tool with the exact schema and all required parameters. If a parameter is missing or has a wrong type, correct it before retrying.
+Correct usage example:
+${_toolUsageExample(call.tool)}
+
+中文：
+工具调用失败。
+工具：${call.tool}
+参数：${jsonEncode(call.arguments)}
+原因：$error
+请严格按照工具 schema 调用，并提供所有必需参数。如果参数缺失或类型错误，请修正后再重试。
+正确调用示例：
+${_toolUsageExample(call.tool)}''';
+
+  String _toolUsageExample(String tool) {
+    final args = switch (tool) {
+      'ssh_exec' => {'command': 'ls -la'},
+      'terminal_wait' => {'delayMs': 3000},
+      'list_files' => {'path': '/home/user'},
+      'read_file' => {'path': '/home/user/main.dart'},
+      'write_file' => {'path': '/home/user/main.dart', 'content': '...'},
+      'replace_file_text' => {'path': '/home/user/main.dart', 'oldText': 'old', 'newText': 'new'},
+      'move_file' => {'from': '/home/user/a.txt', 'to': '/home/user/b.txt'},
+      'delete_file' => {'path': '/home/user/a.txt', 'directory': false},
+      'mkdir' => {'path': '/home/user/src'},
+      'github_status' => {},
+      'github_verify_token' => {},
+      'github_list_repos' => {'visibility': 'all', 'per_page': 30},
+      'github_create_repo' => {'name': 'my-project', 'private': true, 'description': '...'},
+      'github_get_repo' => {'owner': 'user', 'repo': 'repo'},
+      'github_create_or_update_file' => {'owner': 'user', 'repo': 'repo', 'path': 'file.txt', 'content': '...', 'message': 'update file', 'branch': 'main'},
+      'github_dispatch_workflow' => {'owner': 'user', 'repo': 'repo', 'workflow': 'ci.yml', 'ref': 'main', 'inputs': <String, dynamic>{}},
+      'github_list_runs' => {'owner': 'user', 'repo': 'repo', 'per_page': 5},
+      _ => {'tool': tool, 'arguments': <String, dynamic>{}},
+    };
+    return jsonEncode({'tool': tool, 'arguments': args});
   }
 
   Future<void> rejectTool(String toolCallId) async {
@@ -459,16 +660,22 @@ Future<void> runTerminalCommand(String command) async {
     if (found == null) return;
     final c = found.$2;
     _replaceTool(toolCallId, ToolCallRecord(id: c.id, tool: c.tool, arguments: c.arguments, status: 'rejected', output: '用户已拒绝'));
+    await _rewriteMemoryFromMessages();
+    if (agentMode == AgentMode.code) Future.microtask(_continueAgentLoopIfNeeded);
   }
 
   Future<void> applyChange(String changeId) async {
     final found = _findChange(changeId);
     if (found == null) return;
     final c = found.$2;
+    liveCodeChange = FileChangeRecord(id: c.id, path: c.path, oldText: c.oldText, newText: c.newText, status: 'running');
+    notifyListeners();
     await writeRemoteTextWithBackup(c.path, c.newText);
+    liveCodeChange = FileChangeRecord(id: c.id, path: c.path, oldText: c.oldText, newText: c.newText, status: 'saved');
     _replaceChange(changeId, FileChangeRecord(id: c.id, path: c.path, oldText: c.oldText, newText: c.newText, status: 'saved'));
     await journal.append(conversationId: conversationId, event: {'type': 'change', 'path': c.path, 'old': c.oldText, 'new': c.newText});
     await refreshFiles();
+    await _rewriteMemoryFromMessages();
   }
 
   Future<void> rejectChange(String changeId) async {
@@ -476,6 +683,8 @@ Future<void> runTerminalCommand(String command) async {
     if (found == null) return;
     final c = found.$2;
     _replaceChange(changeId, FileChangeRecord(id: c.id, path: c.path, oldText: c.oldText, newText: c.newText, status: 'rejected'));
+    await _rewriteMemoryFromMessages();
+    if (agentMode == AgentMode.code) Future.microtask(_continueAgentLoopIfNeeded);
   }
 
   Map<String, String> get _githubHeaders => {
@@ -526,43 +735,59 @@ Future<void> runTerminalCommand(String command) async {
   }
 
   Future<void> _materializeAgentOutput(String messageId, String rawContent, String? thinking, String? modelLabel) async {
-    final tools = _parseTools(rawContent);
+    if (agentMode == AgentMode.mtc) {
+        final parsed = _extractThinking(rawContent);
+        updateAssistantMessage(messageId, parsed.$2.isEmpty ? rawContent : parsed.$2, thinking: thinking ?? parsed.$1, modelLabel: modelLabel);
+        return;
+      }
+      final plan = _parseTodo(rawContent);
+      if (plan != null) todoPlan = plan;
+      final tools = _parseTools(rawContent);
     final changes = _parseChanges(rawContent);
+    if (changes.isNotEmpty) liveCodeChange = changes.first;
     final clean = rawContent
         .replaceAll(RegExp(r'<tool>[\s\S]*?<\/tool>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<file_change>[\s\S]*?<\/file_change>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<todo>[\s\S]*?<\/todo>', caseSensitive: false), '')
         .trim();
-    updateAssistantMessage(messageId, clean.isEmpty && (tools.isNotEmpty || changes.isNotEmpty) ? '已生成待处理操作。' : clean, thinking: thinking, modelLabel: modelLabel);
+    updateAssistantMessage(messageId, clean.isEmpty && (tools.isNotEmpty || changes.isNotEmpty || plan != null) ? '已生成待处理操作。' : clean, thinking: thinking, modelLabel: modelLabel);
     final idx = messages.indexWhere((m) => m.id == messageId);
     if (idx >= 0) {
       final msg = messages[idx];
       messages[idx] = AgentMessage(id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt, thinking: msg.thinking, modelLabel: msg.modelLabel, toolCalls: tools, changes: changes);
       notifyListeners();
     }
-    for (final t in tools) {
-      if (_shouldAutoApprove(t.tool)) await executeTool(t.id);
-    }
     if (permissionMode == ToolPermissionMode.autoAll) {
+      for (final t in tools) { await executeTool(t.id); }
       for (final c in changes) { await applyChange(c.id); }
+    } else if (agentMode == AgentMode.code && (tools.isNotEmpty || changes.isNotEmpty)) {
+      _agentLoopRound = 0;
     }
+    await _rewriteMemoryFromMessages();
   }
-
-  bool _shouldAutoApprove(String tool) {
-    if (permissionMode == ToolPermissionMode.autoAll) return true;
-    if (permissionMode == ToolPermissionMode.autoReadOnly) return {'list_files', 'read_file', 'github_get_repo', 'github_list_runs'}.contains(tool);
-    return false;
-  }
-
   List<ToolCallRecord> _parseTools(String raw) {
     final reg = RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false);
     return reg.allMatches(raw).map((m) {
       try {
         final data = jsonDecode(m.group(1)!.trim()) as Map<String, dynamic>;
         return ToolCallRecord(id: const Uuid().v4(), tool: data['tool']?.toString() ?? '', arguments: Map<String, dynamic>.from(data['arguments'] as Map? ?? {}));
-      } catch (_) {
-        return ToolCallRecord(id: const Uuid().v4(), tool: 'parse_error', arguments: {'raw': m.group(1)}, status: 'error', output: '工具调用 JSON 解析失败');
+      } catch (e) {
+        return ToolCallRecord(id: const Uuid().v4(), tool: 'parse_error', arguments: {'raw': m.group(1)}, status: 'error', output: _toolErrorMessage(ToolCallRecord(id: 'parse_error', tool: 'parse_error', arguments: {'raw': m.group(1)}), e));
       }
     }).toList();
+  }
+
+  AgentTodoPlan? _parseTodo(String raw) {
+    final reg = RegExp(r'<todo>([\s\S]*?)<\/todo>', caseSensitive: false);
+    final matches = reg.allMatches(raw).toList();
+    if (matches.isEmpty) return null;
+    final match = matches.last;
+    try {
+      final data = jsonDecode(match.group(1)!.trim()) as Map<String, dynamic>;
+      return AgentTodoPlan.fromJson(data);
+    } catch (_) {
+      return null;
+    }
   }
 
   List<FileChangeRecord> _parseChanges(String raw) {
@@ -664,7 +889,9 @@ Future<void> runTerminalCommand(String command) async {
 
 
   void deleteMessage(String id) {
-    messages.removeWhere((e) => e.id == id);
+    final idx = messages.indexWhere((e) => e.id == id);
+    if (idx < 0) return;
+    messages.removeRange(idx, messages.length);
     _rewriteMemoryFromMessages();
     notifyListeners();
   }
@@ -672,12 +899,15 @@ Future<void> runTerminalCommand(String command) async {
   String? rollbackToMessage(String id) {
     final idx = messages.indexWhere((e) => e.id == id);
     if (idx < 0) return null;
-    final text = messages[idx].content;
+    final msg = messages[idx];
+    final text = msg.role == 'user' ? msg.content : null;
     messages.removeRange(idx, messages.length);
     _rewriteMemoryFromMessages();
     notifyListeners();
     return text;
   }
+
+  String? editAndResend(String id) => rollbackToMessage(id);
 
   Future<void> regenerateAfter(String id) async {
     final idx = messages.indexWhere((e) => e.id == id);
@@ -690,13 +920,34 @@ Future<void> runTerminalCommand(String command) async {
   }
 
   Future<void> _rewriteMemoryFromMessages() async {
-    await store.writeMap('memory', conversationId, {'events': messages.map((m) => {'type': 'message', 'id': m.id, 'role': m.role, 'content': m.content, 'thinking': m.thinking, 'modelLabel': m.modelLabel, 'at': m.createdAt.toIso8601String()}).toList()});
+    await store.writeMap('memory', conversationId, {
+      'todoPlan': todoPlan?.toJson(),
+      'events': messages.map((m) => m.toJson()).toList(),
+    });
+    final cfg = activeAiConfig;
+    final threshold = cfg.summaryThreshold <= 0 ? 999999 : cfg.summaryThreshold;
+    final userCount = messages.where((m) => m.role == 'user').length;
+    if (userCount > 0 && userCount % threshold == 0 && messages.length > 2) {
+      await summarizeCurrentMemory(auto: true);
+    }
   }
 
-  Future<void> summarizeCurrentMemory() async {
-    final content = messages.map((m) => '${m.role}: ${m.content}').join('\n');
-    final summary = content.length > 1400 ? '${content.substring(0, 1400)}\n...已压缩 ${messages.length} 条上下文。' : content;
-    await store.writeMap('memory', conversationId, {'events': [{'type': 'summary', 'content': summary, 'at': DateTime.now().toIso8601String()}]});
+  Future<void> summarizeCurrentMemory({bool auto = false}) async {
+    final cfg = activeAiConfig;
+    final content = messages.map((m) => '${m.role == 'user' ? '用户' : 'AI'}: ${m.content}').join('\n');
+    var summary = content.length > 1600 ? '${content.substring(0, 1600)}\n...已压缩 ${messages.length} 条上下文。' : content;
+    if (cfg.apiKey.isNotEmpty && cfg.endpoint.isNotEmpty && cfg.model.isNotEmpty) {
+      try {
+        summary = await AiClient(cfg).sendChat([
+          {'role': 'system', 'content': '你是上下文记忆总结器。请把对话压缩成结构化回顾，保留用户需求、已完成事项、未完成事项、关键配置、仓库/服务器信息、风险与下一步。用“用户/AI/系统状态”分段，简洁但不能遗漏关键事实。'},
+          {'role': 'user', 'content': content},
+        ]);
+      } catch (_) {}
+    }
+    await store.writeMap('memory', conversationId, {'todoPlan': todoPlan?.toJson(), 'events': [
+      {'type': 'summary', 'content': summary, 'auto': auto, 'at': DateTime.now().toIso8601String()},
+      ...messages.reversed.take(6).toList().reversed.map((m) => m.toJson()),
+    ]});
   }
   (int, ToolCallRecord)? _findTool(String id) {
     for (var i = 0; i < messages.length; i++) {
@@ -738,7 +989,7 @@ Future<void> runTerminalCommand(String command) async {
     final reg = RegExp(r'<thinking>([\s\S]*?)</thinking>', caseSensitive: false);
     final matches = reg.allMatches(raw).toList();
     if (matches.isEmpty) return (null, raw);
-    final thinking = matches.map((m) => m.group(1)?.trim()).whereType<String>().where((e) => e.isNotEmpty).join('\n');
+    final thinking = matches.map((m) => _normalizeThinkingText(m.group(1))).whereType<String>().where((e) => e.isNotEmpty).join('\n');
     final content = raw.replaceAll(reg, '').trim();
     return (thinking.isEmpty ? null : thinking, content);
   }
@@ -746,14 +997,24 @@ Future<void> runTerminalCommand(String command) async {
   (String?, String) _extractThinkingStreaming(String raw) {
     final closed = _extractThinking(raw);
     var content = closed.$2;
-    var thinking = closed.$1;
+    var thinking = _normalizeThinkingText(closed.$1);
     final open = RegExp(r'<thinking>([\s\S]*)$', caseSensitive: false).firstMatch(content);
     if (open != null) {
-      final openThinking = open.group(1)?.trim();
+      final openThinking = _normalizeThinkingText(open.group(1));
       thinking = [thinking, if (openThinking != null && openThinking.isNotEmpty) openThinking].whereType<String>().where((e) => e.isNotEmpty).join('\n');
-      content = content.substring(0, open.start).trim();
+      final start = open.start.clamp(0, content.length);
+      content = content.substring(0, start).trim();
     }
     return (thinking == null || thinking.isEmpty ? null : thinking, content);
+  }
+
+  String? _normalizeThinkingText(String? value) {
+    if (value == null) return null;
+    final normalized = value
+        .replaceAll(RegExp(r'</?thinking>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s*\n\s*'), '\n')
+        .trim();
+    return normalized.isEmpty ? null : normalized;
   }
 
   String _joinRemote(String base, String child) => base.endsWith('/') ? '$base$child' : '$base/$child';

@@ -71,7 +71,7 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   }
 
   Future<void> _save() async {
-    await widget.state.ssh.writeFile(widget.path, utf8.encode(controller.text));
+    await widget.state.writeRemoteTextWithBackup(widget.path, controller.text);
     if (mounted) Navigator.pop(context, true);
   }
 

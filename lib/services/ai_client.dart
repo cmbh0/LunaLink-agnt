@@ -51,7 +51,8 @@ class AiClient {
         .timeout(const Duration(seconds: 75));
     _ensureOk(res);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return _messageText(data['choices']?[0]?['message']) ?? data['choices']?[0]?['text'] as String? ?? res.body;
+    final choice = _firstChoice(data);
+    return _messageText(choice?['message']) ?? choice?['text'] as String? ?? res.body;
   }
 
   Future<String> _openAiResponses(List<Map<String, String>> messages) async {
@@ -68,7 +69,16 @@ class AiClient {
         .timeout(const Duration(seconds: 75));
     _ensureOk(res);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return _messageText(data['choices']?[0]?['message']) ?? data['message'] as String? ?? data['text'] as String? ?? res.body;
+    final choice = _firstChoice(data);
+    return _messageText(choice?['message']) ?? data['message'] as String? ?? data['text'] as String? ?? res.body;
+  }
+
+  String? _safeStreamDelta(String payload, String? Function(String) parser) {
+    try {
+      return parser(payload);
+    } catch (_) {
+      return null;
+    }
   }
 
   Stream<String> _streamChatCompletions(Uri uri, List<Map<String, String>> messages) async* {
@@ -90,9 +100,10 @@ class AiClient {
       await for (final line in lines) {
         final trimmed = line.trim();
         if (trimmed.isEmpty || !trimmed.startsWith('data:')) continue;
-        final payload = trimmed.substring(5).trim();
+        final payload = trimmed.length <= 5 ? '' : trimmed.substring(5).trim();
+        if (payload.isEmpty) continue;
         if (payload == '[DONE]') break;
-        final text = _chatStreamDelta(payload);
+        final text = _safeStreamDelta(payload, _chatStreamDelta);
         if (text != null && text.isNotEmpty) {
           emitted = true;
           yield text;
@@ -123,9 +134,10 @@ class AiClient {
       await for (final line in lines) {
         final trimmed = line.trim();
         if (trimmed.isEmpty || !trimmed.startsWith('data:')) continue;
-        final payload = trimmed.substring(5).trim();
+        final payload = trimmed.length <= 5 ? '' : trimmed.substring(5).trim();
+        if (payload.isEmpty) continue;
         if (payload == '[DONE]') break;
-        final text = _responsesStreamDelta(payload);
+        final text = _safeStreamDelta(payload, _responsesStreamDelta);
         if (text != null && text.isNotEmpty) {
           emitted = true;
           yield text;
@@ -155,8 +167,18 @@ class AiClient {
 
   String? _chatStreamDelta(String payload) {
     final data = jsonDecode(payload) as Map<String, dynamic>;
-    final delta = data['choices']?[0]?['delta'];
-    return _messageText(delta) ?? data['choices']?[0]?['text'] as String?;
+    final choice = _firstChoice(data);
+    if (choice == null) return null;
+    final delta = choice['delta'];
+    return _messageText(delta) ?? choice['text'] as String?;
+  }
+
+  Map<String, dynamic>? _firstChoice(Map<String, dynamic> data) {
+    final choices = data['choices'];
+    if (choices is List && choices.isNotEmpty && choices.first is Map) {
+      return Map<String, dynamic>.from(choices.first as Map);
+    }
+    return null;
   }
 
   String? _responsesStreamDelta(String payload) {
@@ -234,35 +256,53 @@ class AgentSystemPrompt {
 你是 LunaLink Agent，一个运行在 Android 上的 AI 编码助手。
 
 ## 工作模式
-- MTC：只沟通需求、架构、UI/UX、风险、任务拆解。默认不发起工具调用。
-- Code：可以生成工具调用、文件变更、GitHub 操作和终端执行计划。
+- MTC：只沟通需求、架构、UI/UX、风险、任务拆解。禁止发起工具调用。
+- Code：可以生成工具调用、文件变更、GitHub 操作和终端执行计划，并应持续推进任务。
 
-## 可用工具
+## 可用工具调用格式
 你可以通过以下格式发起工具调用，应用会根据用户授权策略执行：
 <tool>{"tool":"工具名","arguments":{...}}</tool>
+
+## 任务规划格式（Code 模式强烈要求）
+首次执行复杂任务时，输出一个任务计划块，应用会展示在输入框右上方待办胶囊：
+<todo>{"goal":"任务目标","items":[{"title":"读取项目结构","status":"active"},{"title":"修复问题","status":"pending"}]}</todo>
+之后每轮可再次输出 <todo> 更新状态，status 只使用：pending / active / done。
 
 ### 服务器工具（需要已连接 SSH 服务器）
 - list_files：列出目录文件：`{"path":"/home/user"}`
 - read_file：读取文件内容：`{"path":"/home/user/main.dart"}`
-- write_file：写入文件（高风险，会生成 .bak）：`{"path":"/path","content":"..."}`
-- ssh_exec：执行终端命令（高风险）：`{"command":"ls -la"}`
+- write_file：写入文件（会生成 .bak）：`{"path":"/path","content":"..."}`
+- replace_file_text：替换文件文本：`{"path":"/path","oldText":"旧文本","newText":"新文本"}`
+- move_file：移动/重命名文件：`{"from":"/old","to":"/new"}`
+- delete_file：删除文件或目录：`{"path":"/path","directory":false}`
+- mkdir：创建目录：`{"path":"/path/dir"}`
+- ssh_exec：执行终端命令：`{"command":"ls -la"}`
+- terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
 
 ${hasGitHub ? '''### GitHub 工具（已配置 Token）
-用户已知晓风险并授权你在批准策略范围内管理仓库。可用能力：
+- github_status：查看 GitHub 连接状态：`{}`
+- github_verify_token：验证 Token 当前用户：`{}`
+- github_list_repos：查看仓库：`{"visibility":"all","per_page":30}`
 - github_get_repo：获取仓库信息：`{"owner":"user","repo":"repo"}`
+- github_create_repo：创建仓库：`{"name":"repo","private":true,"description":"..."}`
 - github_create_or_update_file：创建/更新文件并提交：`{"owner":"user","repo":"repo","path":"file.txt","content":"...","message":"commit msg","branch":"main"}`
-- github_dispatch_workflow：触发 Actions 工作流：`{"owner":"user","repo":"repo","workflow":"ci.yml","ref":"main","inputs":{"build_mode":"release"}}`
+- github_dispatch_workflow：触发 Actions：`{"owner":"user","repo":"repo","workflow":"ci.yml","ref":"main","inputs":{}}`
 - github_list_runs：查看构建记录：`{"owner":"user","repo":"repo","per_page":5}`
 ''' : '### GitHub 工具：未配置 Token，不可用。\n'}
 
-## 文件变更
+## 文件变更建议格式
 <file_change>{"path":"/path/file","oldText":"原文","newText":"新内容"}</file_change>
 
-## 规则
+## 授权规则（必须严格遵守）
 - 当前授权策略：$permissionMode
-- 写文件、执行命令、GitHub 写操作属于高风险操作，除非用户开启自动批准，否则只生成待批准卡片。
-- 使用 Markdown 回复。
-- 如果模型有思考内容，可放在 <thinking>...</thinking> 中。
-- 返回清晰计划、风险、diff 摘要和可回滚说明。
+- 所有工具默认都不能自动执行，必须等待用户批准。
+- 只有用户设置为 autoAll / 自动批准后，应用才会自动执行工具和文件变更。
+- 如果工具失败，应用会返回中英双语错误与正确调用示例，你必须据此修正下一次调用。
+
+## 行为规则
+- 如果当前处于 MTC 模式：禁止输出 <tool>、<file_change>、<todo>，禁止请求执行工具，只能聊天、澄清需求和整理方案。
+- 只有 Code 模式才允许输出工具调用、文件变更和任务计划。
+- 使用 Markdown 回复。如果模型有思考内容，可放在 <thinking>...</thinking> 中。
+- 工具执行结果会作为上下文返回给你；任务未完成时应继续下一步，不要要求用户重复说“继续”。
 ''';
 }

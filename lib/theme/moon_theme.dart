@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 class MoonColors {
-  static const bg = Color(0xFFFAFAFA);
+  static const bg = Color(0xFFFFFFFF);
   static const panel = Colors.white;
-  static const panel2 = Color(0xFFF3F4F6);
-  static const edge = Color(0xFFE6E6E6);
-  static const text = Color(0xFF111111);
-  static const muted = Color(0xFF8A8A8A);
+  static const panel2 = Color(0xFFF6F7FB);
+  static const edge = Color(0xFFE8EAF0);
+  static const text = Color(0xFF17181C);
+  static const muted = Color(0xFF7C8492);
   static const moon = Color(0xFF111111);
   static const accent = Color(0xFF5B2CCB);
   static const purple = Color(0xFF5B2CCB);
@@ -16,7 +16,7 @@ class MoonColors {
 }
 
 class MoonTheme {
-  static ThemeData get dark {
+  static ThemeData get light {
     final scheme = ColorScheme.fromSeed(seedColor: MoonColors.accent);
     return ThemeData(
       useMaterial3: true,
