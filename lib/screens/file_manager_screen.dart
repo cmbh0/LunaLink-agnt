@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/ai_models.dart';
 import '../models/server_models.dart';
 import '../services/app_state.dart';
 import '../theme/moon_theme.dart';

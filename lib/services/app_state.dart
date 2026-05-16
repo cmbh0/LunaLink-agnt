@@ -295,7 +295,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> renameLocalEntry(RemoteFileEntry entry, String newName) async {
     final target = p.join(p.dirname(entry.path), newName);
-    await FileSystemEntity.rename(entry.path, target);
+    await entry.isDirectory ? Directory(entry.path).rename(target) : File(entry.path).rename(target);
     notifyListeners();
   }
 
