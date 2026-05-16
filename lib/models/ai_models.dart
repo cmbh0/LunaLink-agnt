@@ -82,8 +82,8 @@ class AiServiceConfig {
   final String? thinkingModel;
   final bool enableThinking;
   final bool streamOutput;
-  final double temperature;
-  final int maxTokens;
+  final double? temperature;
+  final int? maxTokens;
   final Map<String, String> headers;
   final AiApiMode apiMode;
   final ToolPermissionMode permissionMode;
@@ -102,8 +102,8 @@ class AiServiceConfig {
     this.thinkingModel,
     this.enableThinking = true,
     this.streamOutput = true,
-    this.temperature = .2,
-    this.maxTokens = 4096,
+    this.temperature,
+    this.maxTokens,
     this.headers = const {},
     this.apiMode = AiApiMode.openAiChat,
     this.permissionMode = ToolPermissionMode.askEveryTime,
@@ -144,8 +144,8 @@ class AiServiceConfig {
         thinkingModel: json['thinkingModel'] as String?,
         enableThinking: json['enableThinking'] as bool? ?? true,
         streamOutput: json['streamOutput'] as bool? ?? true,
-        temperature: (json['temperature'] as num?)?.toDouble() ?? .2,
-        maxTokens: json['maxTokens'] as int? ?? 4096,
+        temperature: (json['temperature'] as num?)?.toDouble(),
+        maxTokens: (json['maxTokens'] as num?)?.toInt(),
         headers: Map<String, String>.from(json['headers'] as Map? ?? {}),
         apiMode: AiApiMode.values.firstWhere((e) => e.name == json['apiMode'], orElse: () => AiApiMode.messages),
         permissionMode: ToolPermissionMode.values.firstWhere((e) => e.name == json['permissionMode'], orElse: () => ToolPermissionMode.askEveryTime),
@@ -225,8 +225,9 @@ class BrowserSnapshot {
   final String title;
   final String html;
   final String text;
+  final List<String> links;
   final DateTime updatedAt;
-  const BrowserSnapshot({required this.url, required this.title, required this.html, required this.text, required this.updatedAt});
+  const BrowserSnapshot({required this.url, required this.title, required this.html, required this.text, this.links = const [], required this.updatedAt});
 }
 
 class ToolCallRecord {

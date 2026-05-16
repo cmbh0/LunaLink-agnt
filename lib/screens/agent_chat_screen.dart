@@ -104,8 +104,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
     name = TextEditingController(text: cfg.name);
     model = TextEditingController(text: cfg.model);
     key = TextEditingController(text: cfg.apiKey);
-    temp = TextEditingController(text: cfg.temperature.toString());
-    maxTokens = TextEditingController(text: cfg.maxTokens.toString());
+    temp = TextEditingController(text: cfg.temperature?.toString() ?? '');
+    maxTokens = TextEditingController(text: cfg.maxTokens?.toString() ?? '');
     summaryThreshold = TextEditingController(text: cfg.summaryThreshold.toString());
     apiMode = cfg.apiMode;
     stream = cfg.streamOutput;
@@ -173,7 +173,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
           ),
         ),
         _field(key, 'API Key', obscure: true),
-        Row(children: [Expanded(child: _field(temp, 'Temperature')), const SizedBox(width: 8), Expanded(child: _field(maxTokens, 'Max Tokens'))]),
+        Row(children: [Expanded(child: _field(temp, 'Temperature', hint: '留空则不传')), const SizedBox(width: 8), Expanded(child: _field(maxTokens, 'Max Tokens', hint: '留空则不传'))]),
         _label('记忆总结'),
         _field(summaryThreshold, '每多少条用户消息自动总结', hint: '例如 12'),
         const Text('总结使用当前配置与模型。达到阈值后会把上下文压缩为一条 summary 记忆，用于延长上下文。', style: TextStyle(fontSize: 11, color: MoonColors.muted, height: 1.35)),
@@ -208,8 +208,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
       enabledModels: cfg.enabledModels,
       summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
       streamOutput: stream,
-      temperature: double.tryParse(temp.text) ?? .2,
-      maxTokens: int.tryParse(maxTokens.text) ?? 4096,
+      temperature: double.tryParse(temp.text.trim()),
+      maxTokens: int.tryParse(maxTokens.text.trim()),
       apiMode: apiMode,
       permissionMode: state.permissionMode,
     ));
@@ -235,8 +235,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
       name.text = cfg.name;
       model.text = cfg.model;
       key.text = cfg.apiKey;
-      temp.text = cfg.temperature.toString();
-      maxTokens.text = cfg.maxTokens.toString();
+      temp.text = cfg.temperature?.toString() ?? '';
+      maxTokens.text = cfg.maxTokens?.toString() ?? '';
       summaryThreshold.text = cfg.summaryThreshold.toString();
       apiMode = cfg.apiMode;
       stream = cfg.streamOutput;
@@ -257,8 +257,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
       enabledModels: cfg.enabledModels,
       summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
       streamOutput: stream,
-      temperature: double.tryParse(temp.text) ?? .2,
-      maxTokens: int.tryParse(maxTokens.text) ?? 4096,
+      temperature: double.tryParse(temp.text.trim()),
+      maxTokens: int.tryParse(maxTokens.text.trim()),
       apiMode: apiMode,
       permissionMode: context.read<AppState>().permissionMode,
     );
@@ -311,8 +311,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
       enabledModels: enabled,
       summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
       streamOutput: stream,
-      temperature: double.tryParse(temp.text) ?? .2,
-      maxTokens: int.tryParse(maxTokens.text) ?? 4096,
+      temperature: double.tryParse(temp.text.trim()),
+      maxTokens: int.tryParse(maxTokens.text.trim()),
       apiMode: apiMode,
       permissionMode: state.permissionMode,
     ));
@@ -324,6 +324,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
     final cfg = state.activeAiConfig;
     final selected = <String>{...cfg.enabledModels};
     if (selected.isEmpty && model.text.trim().isNotEmpty) selected.add(model.text.trim());
+    final queryCtrl = TextEditingController();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -340,10 +341,31 @@ class _AiConfigPageState extends State<AiConfigPage> {
           const SizedBox(height: 4),
           const Text('勾选后会保存为输入框可快速切换的模型。', style: TextStyle(fontSize: 12, color: MoonColors.muted)),
           const SizedBox(height: 10),
-          Expanded(child: ListView.builder(
-            itemCount: models.length,
+          TextField(
+            controller: queryCtrl,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
+              hintText: '搜索模型关键词，例如 gpt / deepseek / vision',
+              isDense: true,
+              filled: true,
+              fillColor: MoonColors.panel2,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: MoonColors.edge)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: MoonColors.edge)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: MoonColors.accent)),
+            ),
+            onChanged: (_) => setSheet(() {}),
+          ),
+          const SizedBox(height: 10),
+          Expanded(child: Builder(builder: (_) {
+            final q = queryCtrl.text.trim().toLowerCase();
+            final filtered = q.isEmpty ? models : models.where((m) => m.toLowerCase().contains(q)).toList();
+            if (filtered.isEmpty) return const Center(child: Text('没有匹配的模型', style: TextStyle(fontSize: 13, color: MoonColors.muted)));
+            return ListView.builder(
+            itemCount: filtered.length,
             itemBuilder: (_, i) {
-              final m = models[i];
+              final m = filtered[i];
               final checked = selected.contains(m);
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
@@ -362,7 +384,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
                 ),
               );
             },
-          )),
+          );
+          })),
           FilledButton(
             onPressed: () async {
               final enabled = selected.toList();
@@ -379,8 +402,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
                 enabledModels: enabled,
                 summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
                 streamOutput: stream,
-                temperature: double.tryParse(temp.text) ?? .2,
-                maxTokens: int.tryParse(maxTokens.text) ?? 4096,
+                temperature: double.tryParse(temp.text.trim()),
+                maxTokens: int.tryParse(maxTokens.text.trim()),
                 apiMode: apiMode,
                 permissionMode: state.permissionMode,
               ));

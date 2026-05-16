@@ -1071,16 +1071,71 @@ ${_toolUsageExample(call.tool)}''';
     final res = await http.get(uri, headers: {'User-Agent': 'Mozilla/5.0 LunaLink-Agent Browser'}).timeout(const Duration(seconds: 25));
     if (res.statusCode < 200 || res.statusCode >= 400) throw StateError('Browser HTTP ${res.statusCode}: ${_clip(res.body, 600)}');
     final html = res.body;
-    final title = RegExp(r'<title[^>]*>([\s\S]*?)<\/title>', caseSensitive: false).firstMatch(html)?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? uri.toString();
-    final text = html
-        .replaceAll(RegExp(r'<script[\s\S]*?<\/script>', caseSensitive: false), ' ')
-        .replaceAll(RegExp(r'<style[\s\S]*?<\/style>', caseSensitive: false), ' ')
-        .replaceAll(RegExp(r'<[^>]+>'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    browserSnapshot = BrowserSnapshot(url: uri.toString(), title: title, html: html, text: text, updatedAt: DateTime.now());
+    final title = _htmlTitle(html) ?? uri.toString();
+    final text = _htmlToText(html);
+    final links = _extractLinks(html, uri).take(18).toList();
+    var detail = '';
+    if ((call.tool == 'web_search' || call.tool == 'browser_search') && links.isNotEmpty) {
+      final fetched = <String>[];
+      for (final link in links.take(4)) {
+        try {
+          final page = await _fetchPageText(Uri.parse(link));
+          if (page != null && page.text.trim().isNotEmpty) {
+            fetched.add('### ${page.title}\nURL: ${page.url}\n${_clip(page.text, 1800)}');
+          }
+        } catch (_) {}
+      }
+      if (fetched.isNotEmpty) detail = '\n\nFollowed result pages:\n${fetched.join('\n\n')}';
+    }
+    browserSnapshot = BrowserSnapshot(url: uri.toString(), title: title, html: html, text: text, links: links, updatedAt: DateTime.now());
     notifyListeners();
-    return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${_clip(text, 4000)}';
+    final linkText = links.isEmpty ? '' : '\n\nExtracted links:\n${links.take(12).map((e) => '- $e').join('\n')}';
+    return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${_clip(text, 3200)}$linkText$detail';
+  }
+
+  String? _htmlTitle(String html) => RegExp(r'<title[^>]*>([\s\S]*?)<\/title>', caseSensitive: false).firstMatch(html)?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  String _htmlToText(String html) => html
+      .replaceAll(RegExp(r'<script[\s\S]*?<\/script>', caseSensitive: false), ' ')
+      .replaceAll(RegExp(r'<style[\s\S]*?<\/style>', caseSensitive: false), ' ')
+      .replaceAll(RegExp(r'<noscript[\s\S]*?<\/noscript>', caseSensitive: false), ' ')
+      .replaceAll(RegExp(r'<br\s*\/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<\/(p|div|section|article|h[1-6]|li)>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<[^>]+>'), ' ')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('"', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll(RegExp(r'[ \t\x0B\f\r]+'), ' ')
+      .replaceAll(RegExp(r'\n\s*\n+'), '\n')
+      .trim();
+
+  List<String> _extractLinks(String html, Uri base) {
+    final links = <String>[];
+    final seen = <String>{};
+    for (final m in RegExp(r'''<a\s+[^>]*href=["']([^"'#]+)["']''', caseSensitive: false).allMatches(html)) {
+      final raw = m.group(1)?.trim();
+      if (raw == null || raw.isEmpty || raw.startsWith('javascript:') || raw.startsWith('mailto:') || raw.startsWith('tel:')) continue;
+      var resolved = base.resolve(raw).toString();
+      if (resolved.contains('/url?')) {
+        final u = Uri.tryParse(resolved)?.queryParameters['url'] ?? Uri.tryParse(resolved)?.queryParameters['q'];
+        if (u != null && u.startsWith('http')) resolved = u;
+      }
+      if (!resolved.startsWith('http')) continue;
+      if (seen.add(resolved)) links.add(resolved);
+    }
+    return links;
+  }
+
+  Future<({String url, String title, String text})?> _fetchPageText(Uri uri) async {
+    final res = await http.get(uri, headers: {'User-Agent': 'Mozilla/5.0 LunaLink-Agent Browser', 'Accept': 'text/html,application/xhtml+xml'}).timeout(const Duration(seconds: 12));
+    if (res.statusCode < 200 || res.statusCode >= 400) return null;
+    final contentType = res.headers['content-type'] ?? '';
+    if (contentType.isNotEmpty && !contentType.contains('text/html') && !contentType.contains('text/plain')) return null;
+    final html = res.body;
+    return (url: uri.toString(), title: _htmlTitle(html) ?? uri.toString(), text: _htmlToText(html));
   }
 
   String _clip(String value, int max) => value.length <= max ? value : value.substring(0, max);

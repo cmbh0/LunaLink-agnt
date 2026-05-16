@@ -152,16 +152,16 @@ class AiClient {
   Map<String, dynamic> _chatBody(List<Map<String, String>> messages, {required bool stream}) => {
         'model': config.model,
         'messages': messages,
-        'temperature': config.temperature,
-        'max_tokens': config.maxTokens,
+        if (config.temperature != null) 'temperature': config.temperature,
+        if (config.maxTokens != null) 'max_tokens': config.maxTokens,
         if (stream) 'stream': true,
       };
 
   Map<String, dynamic> _responsesBody(List<Map<String, String>> messages, {required bool stream}) => {
         'model': config.model,
         'input': messages.map((m) => {'role': m['role'], 'content': m['content']}).toList(),
-        'temperature': config.temperature,
-        'max_output_tokens': config.maxTokens,
+        if (config.temperature != null) 'temperature': config.temperature,
+        if (config.maxTokens != null) 'max_output_tokens': config.maxTokens,
         if (stream) 'stream': true,
       };
 
@@ -292,8 +292,8 @@ class AgentSystemPrompt {
 - ssh_exec：真实执行服务器终端命令：`{"command":"ls -la && pwd"}`。这是服务器命令首选工具。
 - terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
 
-- browser_open：内置浏览器打开网页并返回 HTML/文本摘要：`{"url":"https://example.com"}`
-- web_search：联网搜索并在内置浏览器窗口展示结果页：`{"query":"Flutter WebView"}`
+- browser_open：打开指定 URL，返回 HTML 清洗文本、标题和可继续打开的链接：`{"url":"https://example.com"}`
+- web_search：联网搜索并自动提取搜索结果页链接，优先跟进前几个结果页返回正文摘要：`{"query":"Flutter WebView"}`。如果搜索页只给出表面结果，应继续使用 browser_open 打开 Extracted links 里的目标 URL。
 
 ### GitHub 工具（通用真实 API）
 - github_api：调用任意 GitHub REST API，覆盖 Issues/PR/Actions/Branches/Releases/Packages/Orgs/Teams/Gists/Search/Commits/Deployments 等 GitHub API 支持的能力：`{"method":"GET","path":"/user","body":{}}`
