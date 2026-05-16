@@ -12,6 +12,8 @@ class WorkspaceScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('本地工作区')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFBBF7D0))), child: const Row(children: [Icon(Icons.workspaces_outline, size: 16, color: Color(0xFF16A34A)), SizedBox(width: 8), Expanded(child: Text('本地：当前页面管理本机工作区，不是 Cloud 远程目录', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF15803D))))])),
+        const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),

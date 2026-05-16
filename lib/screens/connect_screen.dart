@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/server_models.dart';
@@ -27,6 +28,16 @@ class _ConnectScreenState extends State<ConnectScreen> {
       appBar: widget.fullPage ? AppBar(title: const Text('Cloud 服务器')) : null,
       body: ListView(padding: const EdgeInsets.all(16), children: [
 const Text('连接服务器 / 虚拟主机', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+       const SizedBox(height: 12),
+       InkWell(
+         borderRadius: BorderRadius.circular(18),
+         onTap: () => launchUrl(Uri.parse('https://sadidc.com/aff/LYGJKADP'), mode: LaunchMode.externalApplication),
+         child: Container(
+           padding: const EdgeInsets.all(14),
+           decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFFFF7ED), Color(0xFFFFEDD5)]), borderRadius: BorderRadius.circular(18), border: Border.all(color: Color(0xFFF97316), width: 1.2)),
+           child: const Row(children: [Icon(Icons.local_fire_department_rounded, color: Color(0xFFF97316)), SizedBox(width: 10), Expanded(child: Text('没有服务器？点击购买超低价 Cloud 服务，包括 NAT 机等产品！', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF9A3412))))]),
+         ),
+       ),
        const SizedBox(height: 12),
        DropdownButtonFormField<ServerAccessMode>(
          value: mode,

@@ -17,6 +17,7 @@ class FileManagerScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('文件管理')),
       body: SafeArea(child: Column(children: [
+        _SourceBadge(),
         _FileToolbar(path: state.currentPath),
       if (state.busy) const LinearProgressIndicator(minHeight: 2),
       Expanded(
@@ -29,6 +30,22 @@ class FileManagerScreen extends StatelessWidget {
         ),
       ),
       ])),
+    );
+  }
+}
+
+class _SourceBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final active = state.activeServerId == null ? null : state.servers.where((e) => e.id == state.activeServerId).toList();
+    final label = active == null || active.isEmpty ? 'Cloud：未连接' : 'Cloud：${active.first.mode == ServerAccessMode.ftp ? 'FTP' : active.first.mode == ServerAccessMode.sftp ? 'SFTP' : 'Linux SSH'} · ${active.first.name}';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFBFDBFE))),
+      child: Row(children: [const Icon(Icons.cloud_outlined, size: 16, color: Color(0xFF2563EB)), const SizedBox(width: 8), Expanded(child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8))))]),
     );
   }
 }
