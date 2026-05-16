@@ -553,30 +553,33 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: Colors.white.withOpacity(.97), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 2))]),
       child: Row(children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
           _TopIconButton(onTap: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 21), tooltip: '对话历史'),
-          const SizedBox(width: 12),
-          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Text('<>', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, fontFamily: 'monospace')), tooltip: '工作区绑定'),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Text('<>', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, fontFamily: 'monospace')), tooltip: '工作区绑定'),
+          const SizedBox(width: 8),
           _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 20), tooltip: '文件管理'),
         ]),
-        Expanded(child: Center(child: Container(
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(color: const Color(0xFFF0EEF6), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            _ModeChip(selected: state.agentMode == AgentMode.mtc, label: 'MTC', onTap: () => context.read<AppState>().setAgentMode(AgentMode.mtc)),
-            _ModeChip(selected: state.agentMode == AgentMode.code, label: 'Code', onTap: () => context.read<AppState>().setAgentMode(AgentMode.code)),
-          ]),
+        Expanded(child: Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 104, maxWidth: 132),
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(color: const Color(0xFFF0EEF6), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Expanded(child: _ModeChip(selected: state.agentMode == AgentMode.mtc, label: 'MTC', onTap: () => context.read<AppState>().setAgentMode(AgentMode.mtc))),
+              Expanded(child: _ModeChip(selected: state.agentMode == AgentMode.code, label: 'Code', onTap: () => context.read<AppState>().setAgentMode(AgentMode.code))),
+            ]),
+          ),
         ))),
         Row(mainAxisSize: MainAxisSize.min, children: [
-          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen())), icon: const Icon(Icons.terminal_rounded, size: 20), tooltip: '终端'),
-          const SizedBox(width: 12),
-          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 20), tooltip: '赞助'),
-          const SizedBox(width: 12),
-          _TopIconButton(onTap: onSettings, icon: const Icon(Icons.tune_rounded, size: 20), tooltip: '设置'),
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen())), icon: const Icon(Icons.terminal_rounded, size: 19), tooltip: '终端'),
+          const SizedBox(width: 8),
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 19), tooltip: '赞助'),
+          const SizedBox(width: 8),
+          _TopIconButton(onTap: onSettings, icon: const Icon(Icons.tune_rounded, size: 19), tooltip: '设置'),
         ]),
       ]),
     );
@@ -590,8 +593,8 @@ class _TopIconButton extends StatelessWidget {
   const _TopIconButton({required this.icon, required this.tooltip, required this.onTap});
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 38,
-        height: 38,
+        width: 34,
+        height: 36,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(16),
@@ -687,9 +690,9 @@ class _ModeChip extends StatelessWidget {
     onTap: onTap,
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(color: selected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(16), boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 6, offset: const Offset(0, 1))] : null),
-      child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: selected ? MoonColors.text : MoonColors.muted)),
+      child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: selected ? MoonColors.text : MoonColors.muted))),
     ),
   );
 }
