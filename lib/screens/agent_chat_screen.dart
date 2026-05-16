@@ -690,23 +690,6 @@ class _ThinkingBlockState extends State<_ThinkingBlock> with SingleTickerProvide
 }
 
 // ─── Markdown ───
-class _MarkdownMsg extends StatelessWidget {
-  final String data;
-  const _MarkdownMsg({required this.data});
-  @override
-  Widget build(BuildContext context) => MarkdownBody(
-    data: data,
-    selectable: true,
-    builders: {'code': _CodeBuilder()},
-    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-      p: const TextStyle(color: MoonColors.text, fontSize: 14, height: 1.45),
-      code: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: MoonColors.accent, backgroundColor: Color(0xFFF5F2FF)),
-      codeblockPadding: EdgeInsets.zero,
-      codeblockDecoration: const BoxDecoration(color: Colors.transparent),
-    ),
-  );
-}
-
 class _CodeBuilder extends MarkdownElementBuilder {
   @override
   Widget? visitElementAfter(dynamic element, TextStyle? preferredStyle) {

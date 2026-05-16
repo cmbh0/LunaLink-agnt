@@ -431,15 +431,16 @@ Future<void> runTerminalCommand(String command) async {
       activeAssistantMessageId = null;
       notifyListeners();
       await _rewriteMemoryFromMessages();
+      var scheduledRetry = false;
       if (agentMode == AgentMode.code && !stopRequested) {
         if (turnOk) {
           if (!isContinuation) _aiRetryCount = 0;
         } else if (shouldRetry) {
+          scheduledRetry = true;
           Future.microtask(() => _retryAgentTurnIfNeeded(content, isContinuation: isContinuation, reason: retryReason));
-          return;
         }
       }
-      if (agentMode == AgentMode.code && !_agentLoopRunning && !stopRequested) {
+      if (!scheduledRetry && agentMode == AgentMode.code && !_agentLoopRunning && !stopRequested) {
         Future.microtask(_continueAgentLoopIfNeeded);
       }
     }
