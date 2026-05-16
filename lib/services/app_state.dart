@@ -279,7 +279,12 @@ class AppState extends ChangeNotifier {
     await out.writeAsBytes(await ssh.readFile(entry.path));
     return out;
   }
-Future<void> runTerminalCommand(String command) async {
+Future<void> sendTerminalKey(String sequence, String label) async {
+    terminalLogs.add('[key] $label');
+    notifyListeners();
+  }
+
+  Future<void> runTerminalCommand(String command) async {
     terminalLogs.add('\$ $command');
     notifyListeners();
     final id = const Uuid().v4();
@@ -346,16 +351,17 @@ Future<void> runTerminalCommand(String command) async {
 
   Future<void> sendAgentTask(String content) async {
     if (generationActive || busy) return;
+    cancelRequested = false;
     _agentLoopRound = 0;
     _aiRetryCount = 0;
     await _requestAgentTurn(content, isContinuation: false);
   }
 
   Future<void> _requestAgentTurn(String content, {required bool isContinuation}) async {
-    if (generationActive || busy) return;
+    if (generationActive || busy || cancelRequested) return;
     busy = true;
     generationActive = true;
-    cancelRequested = false;
+    if (!cancelRequested) cancelRequested = false;
     notifyListeners();
 
     if (!isContinuation) addUserMessage(content);
@@ -427,10 +433,10 @@ Future<void> runTerminalCommand(String command) async {
       final stopRequested = cancelRequested || wasCancelled;
       busy = false;
       generationActive = false;
-      cancelRequested = false;
+      if (!stopRequested) cancelRequested = false;
       activeAssistantMessageId = null;
       notifyListeners();
-      await _rewriteMemoryFromMessages();
+      if (!stopRequested) await _rewriteMemoryFromMessages();
       var scheduledRetry = false;
       if (agentMode == AgentMode.code && !stopRequested) {
         if (turnOk) {
@@ -475,6 +481,14 @@ Future<void> runTerminalCommand(String command) async {
   void cancelGeneration() {
     cancelRequested = true;
     _agentLoopRound = _maxAgentLoopRounds;
+    _agentLoopRunning = false;
+    final id = activeAssistantMessageId;
+    if (id != null) {
+      messages.removeWhere((m) => m.id == id && m.role == 'assistant');
+      activeAssistantMessageId = null;
+    }
+    busy = false;
+    generationActive = false;
     notifyListeners();
   }
 
@@ -499,17 +513,19 @@ Future<void> runTerminalCommand(String command) async {
 
   Future<void> _continueAgentLoopIfNeeded() async {
     if (_agentLoopRunning || agentMode != AgentMode.code || busy || generationActive || cancelRequested) return;
-    if (_isTodoComplete) return;
-    if (!_hasActionNeedingContinuation) return;
-    if (_agentLoopRound >= _maxAgentLoopRounds) {
-      addAssistantMessage('Agent 已连续自动执行 $_maxAgentLoopRounds 轮。为保护设备和接口资源，系统已安全停止本次自动流程；这不是让用户手动继续，而是防止异常无限循环的硬保护。');
-      await _rewriteMemoryFromMessages();
-      return;
-    }
+    if (_isTodoComplete || !_hasActionNeedingContinuation) return;
     _agentLoopRunning = true;
     try {
-      _agentLoopRound += 1;
-      await _requestAgentTurn('继续', isContinuation: true);
+      if (agentMode == AgentMode.code && !cancelRequested && !_isTodoComplete && _hasActionNeedingContinuation) {
+        if (_agentLoopRound >= _maxAgentLoopRounds) {
+          addAssistantMessage('Agent 已连续自动执行 $_maxAgentLoopRounds 轮。为保护设备和接口资源，系统已安全停止本次自动流程；这不是让用户手动继续，而是防止异常无限循环的硬保护。');
+          await _rewriteMemoryFromMessages();
+          return;
+        }
+        _agentLoopRound += 1;
+        _agentLoopRunning = false;
+        await _requestAgentTurn('继续', isContinuation: true);
+      }
     } finally {
       _agentLoopRunning = false;
     }

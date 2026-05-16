@@ -482,6 +482,7 @@ class SponsorPage extends StatelessWidget {
   const SponsorPage({super.key});
   static const registerUrl = 'https://api.headone.fit/register?aff=nZoJ';
   static const qqUrl = 'https://qun.qq.com/universal-share/share?ac=1&authKey=iYUfYoNpOnAuDMfmis088QrKUWiuzODM5B8jzySiXE9O%2BwAaSG6tCeBYBVkkEmvP&busi_data=eyJncm91cENvZGUiOiI5ODI5NzIzNzEiLCJ0b2tlbiI6InM2d3ZGUW5zUjhadjk5MFVHcW00OHMvTE1TUVBrUGRmbVN5NXNROE03aFV2bExLdFlaRG1wZHZMc1pjaURlUW0iLCJ1aW4iOiIzODQ1OTM5Njk4In0%3D&data=WYC5wMLBHNxD7wsCgSSKMLsEfkFl8rQRI-LaLUhQo21P7kF6locIDZp96CEgOAcZJIy-6beGMQE25P4az8UaEA&svctype=4&tempid=h5_group_info';
+  static const wechatId = 'CMBH_LYF';
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('赞助与交流')),
@@ -489,11 +490,32 @@ class SponsorPage extends StatelessWidget {
       Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: MoonColors.edge)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('本工具由北海 cmbh 制作', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
-        const Text('制作不易 🙏 求求赏孩子一口饭吃吧', style: TextStyle(fontSize: 15, color: MoonColors.muted)),
+        const Text('如果你想赞赏或交流，请添加作者微信并说明来意。', style: TextStyle(fontSize: 15, color: MoonColors.muted)),
         const SizedBox(height: 16),
-        ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network('https://img.cdn1.vip/i/6a06eaf82e1cb_1778838264.webp', height: 300, width: double.infinity, fit: BoxFit.contain, loadingBuilder: (context, child, progress) => progress == null ? child : const SizedBox(height: 260, child: Center(child: CircularProgressIndicator())), errorBuilder: (_, __, ___) => const SizedBox(height: 260, child: Center(child: CircularProgressIndicator())))),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: const Color(0xFFF7F4FF), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE2D8FF))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('作者微信', style: TextStyle(fontSize: 12, color: MoonColors.muted, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Row(children: [
+              const Expanded(child: SelectableText(wechatId, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: MoonColors.accent, letterSpacing: .5))),
+              IconButton.filledTonal(onPressed: () {
+                Clipboard.setData(const ClipboardData(text: wechatId));
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('微信号已复制')));
+              }, icon: const Icon(Icons.copy_rounded, size: 18)),
+            ]),
+            const SizedBox(height: 8),
+            const Text('点击下方按钮可尝试跳转微信；若系统不支持直接打开，请复制微信号后在微信内搜索。', style: TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.35)),
+          ]),
+        ),
       ])),
       const SizedBox(height: 14),
+      _SponsorAction(icon: Icons.wechat, title: '复制微信号并打开微信', subtitle: wechatId, onTap: () async {
+        Clipboard.setData(const ClipboardData(text: wechatId));
+        await _openUrl('weixin://');
+      }),
       _SponsorAction(icon: Icons.open_in_new_rounded, title: '注册中转站', subtitle: '以后用得上中转站充值余额，也算支持本软件。', onTap: () => _openUrl(registerUrl)),
       const SizedBox(height: 10),
       _SponsorAction(icon: Icons.groups_2_outlined, title: '加入 QQ 交流群', subtitle: '反馈问题、交流功能、获取更新。', onTap: () => _openUrl(qqUrl)),
@@ -513,7 +535,9 @@ class _SponsorAction extends StatelessWidget {
 
 Future<void> _openUrl(String url) async {
   final uri = Uri.parse(url);
-  await launchUrl(uri, mode: LaunchMode.externalApplication);
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
 }
 
 // ─── Top Bar ───
@@ -805,24 +829,61 @@ class _HoverCopyCodeBlockState extends State<_HoverCopyCodeBlock> {
 }
 
 // ─── Tool Card ───
-class _ToolCard extends StatelessWidget {
+class _ToolCard extends StatefulWidget {
   final ToolCallRecord call;
   const _ToolCard({required this.call});
   @override
+  State<_ToolCard> createState() => _ToolCardState();
+}
+
+class _ToolCardState extends State<_ToolCard> {
+  bool open = false;
+  @override
   Widget build(BuildContext context) {
+    final call = widget.call;
     final done = {'done', 'rejected', 'error', 'running'}.contains(call.status);
-    final color = call.status == 'error' ? MoonColors.danger : call.status == 'done' ? MoonColors.ok : MoonColors.warn;
+    final color = call.status == 'error' ? MoonColors.danger : call.status == 'done' ? MoonColors.ok : call.status == 'running' ? MoonColors.warn : MoonColors.accent;
     final mode = context.watch<AppState>().permissionMode;
+    final hasOutput = call.output?.trim().isNotEmpty == true;
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [Icon(Icons.build_circle_outlined, size: 15, color: color), const SizedBox(width: 5), Text(call.tool, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)), const Spacer(), Text(call.status, style: TextStyle(fontSize: 10, color: color))]),
-        const SizedBox(height: 4),
-        Text('${call.arguments}', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-        if (call.output != null) Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)), child: Text(call.output!, maxLines: 8, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 11))),
-        if (!done) Padding(padding: const EdgeInsets.only(top: 6), child: Row(children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => open = !open),
+          child: Row(children: [
+            Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: MoonColors.muted),
+            const SizedBox(width: 4),
+            Icon(Icons.build_circle_outlined, size: 15, color: color),
+            const SizedBox(width: 5),
+            Expanded(child: Text('工具调用 · ${call.tool}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
+            Text(call.status, style: TextStyle(fontSize: 10, color: color)),
+          ]),
+        ),
+        if (hasOutput) const Padding(
+          padding: EdgeInsets.only(left: 25, top: 3),
+          child: Text('灰色内容为工具返回结果', style: TextStyle(fontSize: 10.5, color: MoonColors.muted)),
+        ),
+        if (open) ...[
+          const SizedBox(height: 6),
+          const Text('调用参数', style: TextStyle(fontSize: 10.5, color: MoonColors.muted, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 3),
+          Text('${call.arguments}', maxLines: 8, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+          if (hasOutput) Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: const Color(0xFFF1F1F4), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE1E1E6))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('工具返回内容', style: TextStyle(fontSize: 10.5, color: MoonColors.muted, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(call.output!, maxLines: 12, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF666673), height: 1.35)),
+            ]),
+          ),
+        ],
+        if (!done) Padding(padding: const EdgeInsets.only(top: 8), child: Row(children: [
           OutlinedButton(onPressed: () => context.read<AppState>().rejectTool(call.id), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30), textStyle: const TextStyle(fontSize: 12)), child: const Text('拒绝')),
           const SizedBox(width: 8),
           FilledButton(onPressed: () => context.read<AppState>().executeTool(call.id), style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30), textStyle: const TextStyle(fontSize: 12)), child: const Text('允许')),
@@ -1050,7 +1111,7 @@ class _LiveCodeOverlayState extends State<_LiveCodeOverlay> {
         child: GestureDetector(
           onPanUpdate: (d) => setState(() => pos += d.delta),
           onTap: () => setState(() => minimized = false),
-          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Text('◐', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)))),
+          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Icon(Icons.nightlight_round, color: Colors.white, size: 25))),
         ),
       );
     }
@@ -1064,16 +1125,16 @@ class _LiveCodeOverlayState extends State<_LiveCodeOverlay> {
         child: Container(
           width: w,
           height: h,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(.97), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 24, offset: const Offset(0, 10))]),
+          decoration: BoxDecoration(color: Colors.white.withOpacity(.98), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFD6D8E0)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 20, offset: const Offset(0, 8))]),
           child: Stack(children: [
             Column(children: [
               GestureDetector(
                 onPanUpdate: (d) => setState(() => pos += d.delta),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(12, 9, 8, 8),
-                  decoration: const BoxDecoration(color: Color(0xFFF6F3FF), borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+                  decoration: const BoxDecoration(color: Color(0xFFF2F3F7), borderRadius: BorderRadius.vertical(top: Radius.circular(10)), border: Border(bottom: BorderSide(color: Color(0xFFD6D8E0)))),
                   child: Row(children: [
-                    const Text('◐ AI 正在编码', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.accent)),
+                    const Icon(Icons.nightlight_round, size: 15, color: MoonColors.accent), const SizedBox(width: 6), const Text('AI 正在编码', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.accent)),
                     const Spacer(),
                     IconButton(onPressed: () => setState(() => minimized = true), icon: const Icon(Icons.remove_rounded, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28)),
                     IconButton(onPressed: () => context.read<AppState>().clearLiveCodeChange(), icon: const Icon(Icons.close_rounded, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28)),
