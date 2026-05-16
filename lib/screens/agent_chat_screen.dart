@@ -55,6 +55,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
     return Stack(children: [
       Column(children: [
         _TopBar(onSettings: () => _showAiConfig(context)),
+        const SizedBox(height: 38),
         if (state.busy) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: state.messages.isEmpty
@@ -69,6 +70,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
         ),
         _Composer(controller: input, onSend: _send),
       ]),
+      const _EnvironmentDock(),
       const _LiveCodeOverlay(),
       const _BrowserOverlay(),
     ]);
@@ -551,14 +553,14 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(color: Colors.white.withOpacity(.96), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 8, offset: const Offset(0, 2))]),
       child: Row(children: [
-        SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '对话历史')),
-        SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Icon(Icons.workspaces_outline, size: 19), padding: EdgeInsets.zero, tooltip: '本地工作区')),
-SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 19), padding: EdgeInsets.zero, tooltip: '文件管理')),
-        const SizedBox(width: 4),
-        _EnvSwitch(state: state),
+        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 21), padding: EdgeInsets.zero, tooltip: '对话历史')),
+        const SizedBox(width: 6),
+        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Text('<>', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, fontFamily: 'monospace')), padding: EdgeInsets.zero, tooltip: '工作区绑定')),
+        const SizedBox(width: 6),
+        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 20), padding: EdgeInsets.zero, tooltip: '文件管理')),
         const Spacer(),
         Container(
           padding: const EdgeInsets.all(2),
@@ -569,10 +571,29 @@ SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.pus
           ]),
         ),
         const Spacer(),
-        SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen())), icon: const Icon(Icons.terminal_rounded, size: 19), padding: EdgeInsets.zero, tooltip: '终端')),
-        SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 19), padding: EdgeInsets.zero, tooltip: '赞助')),
-        SizedBox(width: 36, height: 36, child: IconButton(onPressed: onSettings, icon: const Icon(Icons.tune_rounded, size: 19), padding: EdgeInsets.zero, tooltip: '设置')),
+        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen())), icon: const Icon(Icons.terminal_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '终端')),
+        const SizedBox(width: 6),
+        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 20), padding: EdgeInsets.zero, tooltip: '赞助')),
+        const SizedBox(width: 6),
+        SizedBox(width: 40, height: 40, child: IconButton(onPressed: onSettings, icon: const Icon(Icons.tune_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '设置')),
       ]),
+    );
+  }
+}
+
+class _EnvironmentDock extends StatelessWidget {
+  const _EnvironmentDock();
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final top = MediaQuery.paddingOf(context).top + 48;
+    return Positioned(
+      top: top,
+      right: 14,
+      child: Material(
+        color: Colors.transparent,
+        child: _EnvSwitch(state: state),
+      ),
     );
   }
 }
@@ -588,12 +609,12 @@ class _EnvSwitch extends StatelessWidget {
       onSelected: (v) => context.read<AppState>().setDevelopmentEnvironment(v),
       itemBuilder: (_) => DevelopmentEnvironment.values.map((e) => PopupMenuItem(value: e, child: Text(e.description))).toList(),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(16), border: Border.all(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0))),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(20), border: Border.all(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.055), blurRadius: 12, offset: const Offset(0, 4))]),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 14, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF2563EB) : const Color(0xFF16A34A)),
-          const SizedBox(width: 4),
-          Text('环境：${state.developmentEnvironment.label}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF1D4ED8) : const Color(0xFF15803D))),
+          const SizedBox(width: 6),
+          Text('环境：${state.developmentEnvironment.label}', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF1D4ED8) : const Color(0xFF15803D))),
         ]),
       ),
     );
