@@ -156,7 +156,16 @@ class _AiConfigPageState extends State<AiConfigPage> {
         _field(model, '模型 ID', hint: 'gpt-4o / deepseek-chat / ...'),
         if (cfg.enabledModels.isNotEmpty) Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Wrap(spacing: 6, runSpacing: 6, children: cfg.enabledModels.map((m) => _TinyChip(label: m, selected: m == model.text.trim(), onTap: () => setState(() => model.text = m))).toList()),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: cfg.enabledModels.map((m) => _TinyChip(
+              label: m,
+              selected: m == model.text.trim(),
+              onTap: () => setState(() => model.text = m),
+              onDelete: () => _removeEnabledModel(m),
+            )).toList(),
+          ),
         ),
         _field(key, 'API Key', obscure: true),
         Row(children: [Expanded(child: _field(temp, 'Temperature')), const SizedBox(width: 8), Expanded(child: _field(maxTokens, 'Max Tokens'))]),
@@ -277,6 +286,32 @@ class _AiConfigPageState extends State<AiConfigPage> {
     } finally {
       if (mounted) setState(() => fetchingModels = false);
     }
+  }
+
+  Future<void> _removeEnabledModel(String target) async {
+    final state = context.read<AppState>();
+    final cfg = state.activeAiConfig;
+    final enabled = cfg.enabledModels.where((e) => e != target).toList();
+    final current = model.text.trim();
+    final nextModel = current == target ? (enabled.isNotEmpty ? enabled.first : cfg.model == target ? '' : cfg.model) : current;
+    model.text = nextModel;
+    await state.saveAiConfig(AiServiceConfig(
+      id: cfg.id,
+      name: name.text.trim().isEmpty ? cfg.name : name.text.trim(),
+      provider: cfg.provider,
+      endpoint: endpoint.text.trim(),
+      apiKey: key.text,
+      model: nextModel,
+      availableModels: cfg.availableModels,
+      enabledModels: enabled,
+      summaryThreshold: int.tryParse(summaryThreshold.text) ?? cfg.summaryThreshold,
+      streamOutput: stream,
+      temperature: double.tryParse(temp.text) ?? .2,
+      maxTokens: int.tryParse(maxTokens.text) ?? 4096,
+      apiMode: apiMode,
+      permissionMode: state.permissionMode,
+    ));
+    if (mounted) setState(() => testResult = '已移除模型：$target');
   }
 
   Future<void> _showModelPicker(List<String> models) async {
@@ -418,16 +453,27 @@ class _TinyChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _TinyChip({required this.label, required this.selected, required this.onTap});
+  final VoidCallback? onDelete;
+  const _TinyChip({required this.label, required this.selected, required this.onTap, this.onDelete});
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
     borderRadius: BorderRadius.circular(16),
     child: Container(
-      constraints: const BoxConstraints(maxWidth: 150),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      constraints: const BoxConstraints(maxWidth: 180),
+      padding: const EdgeInsets.only(left: 9, right: 5, top: 5, bottom: 5),
       decoration: BoxDecoration(color: selected ? const Color(0xFFF2EEFF) : MoonColors.panel2, borderRadius: BorderRadius.circular(16), border: Border.all(color: selected ? MoonColors.accent : MoonColors.edge)),
-      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: selected ? MoonColors.accent : MoonColors.text, fontWeight: FontWeight.w600)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: selected ? MoonColors.accent : MoonColors.text, fontWeight: FontWeight.w600))),
+        if (onDelete != null) ...[
+          const SizedBox(width: 4),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onDelete,
+            child: Icon(Icons.close_rounded, size: 14, color: selected ? MoonColors.accent : MoonColors.muted),
+          ),
+        ],
+      ]),
     ),
   );
 }
