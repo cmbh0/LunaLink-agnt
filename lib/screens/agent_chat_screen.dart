@@ -735,31 +735,36 @@ class _ThinkingBlockState extends State<_ThinkingBlock> with SingleTickerProvide
   @override
   void dispose() { pulse.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      GestureDetector(
-        onTap: () => setState(() => open = !open),
-        child: FadeTransition(
-          opacity: Tween<double>(begin: .4, end: 1.0).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 14, color: MoonColors.muted),
-            const SizedBox(width: 3),
-            Text(widget.active ? '正在思考...' : '思考过程', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: MoonColors.muted)),
-          ]),
+  Widget build(BuildContext context) {
+    final thinkingText = widget.thinking
+        .replaceAll(RegExp(r'\n(?!\n)'), ' ')
+        .replaceAll(RegExp(r'[ \t]{2,}'), ' ')
+        .trim();
+    final maxWidth = (MediaQuery.sizeOf(context).width * .72).clamp(240.0, 560.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        GestureDetector(
+          onTap: () => setState(() => open = !open),
+          child: FadeTransition(
+            opacity: Tween<double>(begin: .4, end: 1.0).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 14, color: MoonColors.muted),
+              const SizedBox(width: 3),
+              Text(widget.active ? '正在思考...' : '思考过程', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: MoonColors.muted)),
+            ]),
+          ),
         ),
-      ),
-      if (open) Container(
-        margin: const EdgeInsets.only(left: 6, top: 4),
-        padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
-        decoration: const BoxDecoration(border: Border(left: BorderSide(color: MoonColors.edge, width: 1.2))),
-        child: SizedBox(
-          width: MediaQuery.sizeOf(context).width * .66,
-          child: Text(widget.thinking, softWrap: true, textAlign: TextAlign.start, style: const TextStyle(fontSize: 12.5, color: MoonColors.muted, height: 1.55, letterSpacing: .1)),
+        if (open) Container(
+          width: maxWidth,
+          margin: const EdgeInsets.only(left: 6, top: 4),
+          padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4, right: 4),
+          decoration: const BoxDecoration(border: Border(left: BorderSide(color: MoonColors.edge, width: 1.2))),
+          child: Text(thinkingText, softWrap: true, textAlign: TextAlign.start, style: const TextStyle(fontSize: 12.5, color: MoonColors.muted, height: 1.55, letterSpacing: .1)),
         ),
-      ),
-    ]),
-  );
+      ]),
+    );
+  }
 }
 
 // ─── Markdown ───

@@ -1164,11 +1164,36 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
 
   String? _normalizeThinkingText(String? value) {
     if (value == null) return null;
-    final normalized = value
-        .replaceAll(RegExp(r'</?thinking>', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\s*\n\s*'), '\n')
-        .trim();
+    final stripped = value.replaceAll(RegExp(r'</?thinking>', caseSensitive: false), '').trim();
+    if (stripped.isEmpty) return null;
+    final paragraphs = <String>[];
+    final buffer = StringBuffer();
+    for (final rawLine in stripped.split(RegExp(r'\r?\n'))) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        if (buffer.isNotEmpty) {
+          paragraphs.add(buffer.toString().trim());
+          buffer.clear();
+        }
+        continue;
+      }
+      if (buffer.isNotEmpty && _needsThinkingSeparator(buffer.toString(), line)) buffer.write(' ');
+      buffer.write(line);
+    }
+    if (buffer.isNotEmpty) paragraphs.add(buffer.toString().trim());
+    final normalized = paragraphs.join('\n\n').replaceAll(RegExp(r'[ \t]{2,}'), ' ').trim();
     return normalized.isEmpty ? null : normalized;
+  }
+
+  bool _needsThinkingSeparator(String left, String right) {
+    if (left.isEmpty || right.isEmpty) return false;
+    final last = left.isEmpty ? '' : left.substring(left.length - 1);
+    final first = right.isEmpty ? '' : right.substring(0, 1);
+    final cjkOrPunct = RegExp(r'^[\u3400-\u9fff\u3040-\u30ff，。！？；：、,.!?;:)）】》〉]$');
+    final startsPunct = RegExp(r'^[，。！？；：、,.!?;:)）】》〉]$');
+    if (startsPunct.hasMatch(first)) return false;
+    if (cjkOrPunct.hasMatch(last) || cjkOrPunct.hasMatch(first)) return false;
+    return true;
   }
 
   String _joinRemote(String base, String child) => base.endsWith('/') ? '$base$child' : '$base/$child';
