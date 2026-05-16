@@ -557,6 +557,8 @@ class _TopBar extends StatelessWidget {
         SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '对话历史')),
         SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Icon(Icons.workspaces_outline, size: 19), padding: EdgeInsets.zero, tooltip: '本地工作区')),
 SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 19), padding: EdgeInsets.zero, tooltip: '文件管理')),
+        const SizedBox(width: 4),
+        _EnvSwitch(state: state),
         const Spacer(),
         Container(
           padding: const EdgeInsets.all(2),
@@ -571,6 +573,29 @@ SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.pus
         SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 19), padding: EdgeInsets.zero, tooltip: '赞助')),
         SizedBox(width: 36, height: 36, child: IconButton(onPressed: onSettings, icon: const Icon(Icons.tune_rounded, size: 19), padding: EdgeInsets.zero, tooltip: '设置')),
       ]),
+    );
+  }
+}
+
+class _EnvSwitch extends StatelessWidget {
+  final AppState state;
+  const _EnvSwitch({required this.state});
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<DevelopmentEnvironment>(
+      tooltip: '开发环境',
+      initialValue: state.developmentEnvironment,
+      onSelected: (v) => context.read<AppState>().setDevelopmentEnvironment(v),
+      itemBuilder: (_) => DevelopmentEnvironment.values.map((e) => PopupMenuItem(value: e, child: Text(e.description))).toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(16), border: Border.all(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0))),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 14, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF2563EB) : const Color(0xFF16A34A)),
+          const SizedBox(width: 4),
+          Text('环境：${state.developmentEnvironment.label}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF1D4ED8) : const Color(0xFF15803D))),
+        ]),
+      ),
     );
   }
 }

@@ -14,8 +14,22 @@ class ConversationMeta {
         updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? DateTime.now(),
       );
 }
-
 enum AgentMode { mtc, code }
+
+enum DevelopmentEnvironment { cloud, local }
+
+extension DevelopmentEnvironmentLabel on DevelopmentEnvironment {
+  String get label => switch (this) {
+        DevelopmentEnvironment.cloud => 'Cloud',
+        DevelopmentEnvironment.local => 'Local',
+      };
+
+  String get description => switch (this) {
+        DevelopmentEnvironment.cloud => '云端开发：AI 默认优先使用服务器 SSH/SFTP/FTP 与 Cloud 文件工具',
+        DevelopmentEnvironment.local => '本地开发：AI 默认优先使用当前对话绑定的本地工作区工具',
+      };
+}
+
 
 class GitHubConfig {
   final String token;
@@ -187,6 +201,14 @@ class AgentMessage {
         toolCalls: toolCalls ?? this.toolCalls,
         changes: changes ?? this.changes,
       );
+}
+
+class CloudWorkspaceBinding {
+  final String serverId;
+  final String path;
+  const CloudWorkspaceBinding({required this.serverId, required this.path});
+  Map<String, dynamic> toJson() => {'serverId': serverId, 'path': path};
+  factory CloudWorkspaceBinding.fromJson(Map<String, dynamic> json) => CloudWorkspaceBinding(serverId: json['serverId'] as String? ?? '', path: json['path'] as String? ?? '/');
 }
 
 class LocalWorkspace {

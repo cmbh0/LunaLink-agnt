@@ -24,6 +24,8 @@ class AppState extends ChangeNotifier {
   GitHubConfig github = const GitHubConfig();
   String? activeServerId;
   String? boundWorkspaceId;
+  CloudWorkspaceBinding? boundCloudWorkspace;
+  DevelopmentEnvironment developmentEnvironment = DevelopmentEnvironment.cloud;
   bool autoReconnect = false;
   bool generationActive = false;
   bool cancelRequested = false;
@@ -91,6 +93,8 @@ class AppState extends ChangeNotifier {
       ..clear()
       ..addAll((workspaceDoc['items'] as List? ?? []).whereType<Map>().map((e) => LocalWorkspace.fromJson(Map<String, dynamic>.from(e))));
     final bindings = Map<String, dynamic>.from(workspaceDoc['bindings'] as Map? ?? {});
+    final cloudBindings = Map<String, dynamic>.from(workspaceDoc['cloudBindings'] as Map? ?? {});
+    final envs = Map<String, dynamic>.from(workspaceDoc['environments'] as Map? ?? {});
     if (savedConversationId != null && conversations.any((e) => e.id == savedConversationId)) {
       conversationId = savedConversationId;
     } else if (conversations.isNotEmpty) {
@@ -98,6 +102,9 @@ class AppState extends ChangeNotifier {
     }
     await _loadConversationMessages(conversationId);
     boundWorkspaceId = bindings[conversationId] as String?;
+    final cloud = cloudBindings[conversationId];
+    boundCloudWorkspace = cloud is Map ? CloudWorkspaceBinding.fromJson(Map<String, dynamic>.from(cloud)) : null;
+    developmentEnvironment = DevelopmentEnvironment.values.firstWhere((e) => e.name == envs[conversationId], orElse: () => DevelopmentEnvironment.cloud);
     final githubDoc = await store.readMap('profiles', 'github', fallback: const {});
     github = GitHubConfig.fromJson(githubDoc);
     final activeAiDoc = await store.readMap('profiles', 'active_ai', fallback: const {});
@@ -179,19 +186,28 @@ class AppState extends ChangeNotifier {
     conversationId = id;
     await store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList(), 'activeConversationId': conversationId});
     await _loadConversationMessages(id);
-    final workspaceDoc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}});
+    final workspaceDoc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}, 'cloudBindings': <String, dynamic>{}, 'environments': <String, dynamic>{}});
     final bindings = Map<String, dynamic>.from(workspaceDoc['bindings'] as Map? ?? {});
+    final cloudBindings = Map<String, dynamic>.from(workspaceDoc['cloudBindings'] as Map? ?? {});
+    final envs = Map<String, dynamic>.from(workspaceDoc['environments'] as Map? ?? {});
     boundWorkspaceId = bindings[id] as String?;
+    final cloud = cloudBindings[id];
+    boundCloudWorkspace = cloud is Map ? CloudWorkspaceBinding.fromJson(Map<String, dynamic>.from(cloud)) : null;
+    developmentEnvironment = DevelopmentEnvironment.values.firstWhere((e) => e.name == envs[id], orElse: () => DevelopmentEnvironment.cloud);
     notifyListeners();
   }
 
   Future<void> _saveConversations() => store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList(), 'activeConversationId': conversationId});
 
   Future<void> _saveWorkspaces() async {
-    final doc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}});
+    final doc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}, 'cloudBindings': <String, dynamic>{}, 'environments': <String, dynamic>{}});
     final bindings = Map<String, dynamic>.from(doc['bindings'] as Map? ?? {});
+    final cloudBindings = Map<String, dynamic>.from(doc['cloudBindings'] as Map? ?? {});
+    final envs = Map<String, dynamic>.from(doc['environments'] as Map? ?? {});
     if (boundWorkspaceId == null) { bindings.remove(conversationId); } else { bindings[conversationId] = boundWorkspaceId; }
-    await store.writeMap('profiles', 'workspaces', {'items': localWorkspaces.map((e) => e.toJson()).toList(), 'bindings': bindings});
+    if (boundCloudWorkspace == null) { cloudBindings.remove(conversationId); } else { cloudBindings[conversationId] = boundCloudWorkspace!.toJson(); }
+    envs[conversationId] = developmentEnvironment.name;
+    await store.writeMap('profiles', 'workspaces', {'items': localWorkspaces.map((e) => e.toJson()).toList(), 'bindings': bindings, 'cloudBindings': cloudBindings, 'environments': envs});
   }
 
   Future<Directory> _workspaceRoot() async {
@@ -213,7 +229,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> bindWorkspace(String? id) async { boundWorkspaceId = id; await _saveWorkspaces(); notifyListeners(); }
+  Future<void> bindWorkspace(String? id) async { boundWorkspaceId = id; if (id != null) developmentEnvironment = DevelopmentEnvironment.local; await _saveWorkspaces(); notifyListeners(); }
+
+  Future<void> bindCloudWorkspace({String? serverId, String? path}) async {
+    if (serverId == null || path == null || path.trim().isEmpty) {
+      boundCloudWorkspace = null;
+    } else {
+      boundCloudWorkspace = CloudWorkspaceBinding(serverId: serverId, path: _normalizeRemote(path.trim()));
+      developmentEnvironment = DevelopmentEnvironment.cloud;
+      if (activeServerId == serverId) currentPath = boundCloudWorkspace!.path;
+    }
+    await _saveWorkspaces();
+    notifyListeners();
+  }
+
+  Future<void> setDevelopmentEnvironment(DevelopmentEnvironment env) async {
+    developmentEnvironment = env;
+    await _saveWorkspaces();
+    notifyListeners();
+  }
 
   Future<List<RemoteFileEntry>> listLocalWorkspace() async {
     final ws = activeWorkspace;
@@ -518,7 +552,9 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     final modeGuide = agentMode == AgentMode.mtc
         ? '当前是 MTC 方案沟通模式：只能聊天和整理需求，禁止输出 <tool> 或 <file_change>，禁止要求应用执行任何工具调用。你需要专注需求澄清、架构方案、UI/UX 设计和风险评估。'
         : '当前是 Code 编码模式：必须按照持续 Agent 工作流推进：先规划 todo，再执行工具；工具结果会自动回传给你；todo 未全部 done 前必须继续下一步；全部 done 后输出最终总结并停止。当前授权策略：${permissionMode.name}。';
-    final prompt = '$modeGuide\n当前远程目录：$currentPath\n${isContinuation ? '系统继续请求：工具/文件操作结果已写入上文，请根据最新结果继续执行任务。如果目标完成，请输出全部 done 的 <todo> 和最终总结；如果未完成，请继续输出下一步需要的 <tool> 或 <file_change>。' : '用户任务：$content'}';
+    final localHint = activeWorkspace == null ? '未绑定本地工作区' : '${activeWorkspace!.name} (${activeWorkspace!.path})';
+    final cloudHint = boundCloudWorkspace == null ? '未绑定 Cloud 工作目录' : '${boundCloudWorkspace!.path}';
+    final prompt = '$modeGuide\n开发环境：${developmentEnvironment.label}\n当前远程目录：$currentPath\n本地工作区：$localHint\nCloud 工作目录绑定：$cloudHint\n${isContinuation ? '系统继续请求：工具/文件操作结果已写入上文，请根据最新结果继续执行任务。如果目标完成，请输出全部 done 的 <todo> 和最终总结；如果未完成，请继续输出下一步需要的 <tool> 或 <file_change>。' : '用户任务：$content'}';
     final modelLabel = '${cfg.name} · ${cfg.model}';
     final id = addAssistantMessage('', modelLabel: modelLabel);
     activeAssistantMessageId = id;
@@ -533,7 +569,7 @@ Future<void> sendTerminalKey(String sequence, String label) async {
       if (cfg.model.trim().isEmpty) throw StateError('未配置模型 ID。请进入 AI 配置填写模型名称。');
       if (cfg.apiKey.trim().isEmpty) throw StateError('未配置 API Key。请进入 AI 配置填写密钥。');
 
-      final systemPrompt = AgentSystemPrompt.build(hasGitHub: github.isConnected, permissionMode: permissionMode.name);
+      final systemPrompt = AgentSystemPrompt.build(hasGitHub: github.isConnected, permissionMode: permissionMode.name, environmentMode: developmentEnvironment.name);
       final req = _buildAiRequest(systemPrompt, prompt, includeExistingCurrentUser: !isContinuation ? false : true);
 
       if (cfg.streamOutput) {
@@ -694,6 +730,18 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     return false;
   }
 
+  Future<void> _executeLocalWriteTool(ToolCallRecord call) async {
+    await writeLocalWorkspaceFile(_requiredString(call, 'path', 'README.md'), call.arguments['content'] as String? ?? '');
+  }
+
+  bool _preferLocalForGenericTool(ToolCallRecord call) {
+    if (developmentEnvironment != DevelopmentEnvironment.local || activeWorkspace == null) return false;
+    if (call.arguments['environment'] == 'cloud' || call.arguments['target'] == 'cloud') return false;
+    final path = call.arguments['path'] ?? call.arguments['from'] ?? call.arguments['to'];
+    if (path is String && path.startsWith('/')) return false;
+    return true;
+  }
+
   Future<void> executeTool(String toolCallId) async {
     final found = _findTool(toolCallId);
     if (found == null) return;
@@ -738,20 +786,34 @@ Future<void> sendTerminalKey(String sequence, String label) async {
         case 'dir':
         case 'list_dir':
         case 'list_files':
-          final path = call.arguments['path'] as String? ?? currentPath;
-          final list = await ssh.listDir(path);
-          output = list.map((e) => '${e.isDirectory ? 'd' : '-'} ${e.name} ${e.size}').join('\n');
+          if (_preferLocalForGenericTool(call)) {
+            final list = await listLocalWorkspace();
+            output = list.map((e) => '${e.isDirectory ? 'd' : '-'} ${e.name} ${e.size}').join('\n');
+          } else {
+            final path = call.arguments['path'] as String? ?? currentPath;
+            final list = await ssh.listDir(path);
+            output = list.map((e) => '${e.isDirectory ? 'd' : '-'} ${e.name} ${e.size}').join('\n');
+          }
           break;
         case 'cat':
         case 'read':
         case 'read_file':
-          final bytes = await ssh.readFile(_requiredString(call, 'path', '/home/user/project/main.dart'));
-          output = utf8.decode(bytes, allowMalformed: true);
+          if (_preferLocalForGenericTool(call)) {
+            output = await readLocalWorkspaceFile(_requiredString(call, 'path', 'README.md'));
+          } else {
+            final bytes = await ssh.readFile(_requiredString(call, 'path', '/home/user/project/main.dart'));
+            output = utf8.decode(bytes, allowMalformed: true);
+          }
           break;
         case 'write':
         case 'save_file':
         case 'create_file':
         case 'write_file':
+          if (_preferLocalForGenericTool(call)) {
+            await _executeLocalWriteTool(call);
+            output = 'local file written with .backup snapshot if overwritten';
+            break;
+          }
           final path = _requiredString(call, 'path', '/path/file');
           final content = call.arguments['content'] as String? ?? '';
           String old = '';
@@ -767,6 +829,16 @@ Future<void> sendTerminalKey(String sequence, String label) async {
         case 'edit_file':
         case 'replace_text':
         case 'replace_file_text':
+          if (_preferLocalForGenericTool(call)) {
+            final localPath = _requiredString(call, 'path', 'README.md');
+            final oldText = _requiredString(call, 'oldText', '旧文本');
+            final newText = _requiredString(call, 'newText', '新文本');
+            final current = await readLocalWorkspaceFile(localPath);
+            if (!current.contains(oldText)) throw StateError('oldText not found in local file.');
+            await writeLocalWorkspaceFile(localPath, current.replaceFirst(oldText, newText));
+            output = 'replaced text in local workspace file $localPath';
+            break;
+          }
           final path = _requiredString(call, 'path', '/path/file');
           final oldText = _requiredString(call, 'oldText', '旧文本');
           final newText = _requiredString(call, 'newText', '新文本');
@@ -797,9 +869,14 @@ Future<void> sendTerminalKey(String sequence, String label) async {
         case 'create_dir':
         case 'make_directory':
         case 'mkdir':
-          await ssh.mkdir(_requiredString(call, 'path', '/path/dir'));
-          output = 'directory created';
-          await refreshFiles();
+          if (_preferLocalForGenericTool(call)) {
+            await createLocalWorkspaceEntry(_requiredString(call, 'path', 'src'), directory: true);
+            output = 'local directory created';
+          } else {
+            await ssh.mkdir(_requiredString(call, 'path', '/path/dir'));
+            output = 'directory created';
+            await refreshFiles();
+          }
           break;
         case 'browser_open':
         case 'web_open':
@@ -1419,8 +1496,8 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
     if (left.isEmpty || right.isEmpty) return false;
     final last = left.isEmpty ? '' : left.substring(left.length - 1);
     final first = right.isEmpty ? '' : right.substring(0, 1);
-    final cjkOrPunct = RegExp(r'^[\u3400-\u9fff\u3040-\u30ff，。！？；：、,.!?;:)）】》〉]$');
-    final startsPunct = RegExp(r'^[，。！？；：、,.!?;:)）】》〉]$');
+    final cjkOrPunct = RegExp(r'^[\u3400-\u9fff\u3040-\u30ff，。！？；：、,.!?;:）】》〉]$');
+    final startsPunct = RegExp(r'^[，。！？；：、,.!?;:）】》〉]$');
     if (startsPunct.hasMatch(first)) return false;
     if (cjkOrPunct.hasMatch(last) || cjkOrPunct.hasMatch(first)) return false;
     return true;
