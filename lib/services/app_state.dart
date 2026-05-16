@@ -35,8 +35,10 @@ class AppState extends ChangeNotifier {
   AgentTodoPlan? todoPlan;
   FileChangeRecord? liveCodeChange;
   int _agentLoopRound = 0;
+  int _aiRetryCount = 0;
   bool _agentLoopRunning = false;
-  static const int _maxAgentLoopRounds = 12;
+  static const int _maxAgentLoopRounds = 50;
+  static const int _maxAiRetries = 5;
   String? selectedAiConfigId;
 
   AppState() {
@@ -345,6 +347,7 @@ Future<void> runTerminalCommand(String command) async {
   Future<void> sendAgentTask(String content) async {
     if (generationActive || busy) return;
     _agentLoopRound = 0;
+    _aiRetryCount = 0;
     await _requestAgentTurn(content, isContinuation: false);
   }
 
@@ -365,6 +368,11 @@ Future<void> runTerminalCommand(String command) async {
     final id = addAssistantMessage('', modelLabel: modelLabel);
     activeAssistantMessageId = id;
 
+    var turnOk = false;
+    var shouldRetry = false;
+    var retryReason = '';
+    var wasCancelled = false;
+
     try {
       if (cfg.endpoint.trim().isEmpty) throw StateError('未配置 API Base URL。请进入 AI 配置填写接口地址。');
       if (cfg.model.trim().isEmpty) throw StateError('未配置模型 ID。请进入 AI 配置填写模型名称。');
@@ -384,35 +392,54 @@ Future<void> runTerminalCommand(String command) async {
           if (cancelRequested) break;
         }
         if (cancelRequested) {
+          wasCancelled = true;
           final parsed = _extractThinkingStreaming(raw);
           updateAssistantMessage(id, raw.isEmpty ? '已取消 AI 输出。' : '${parsed.$2}\n\n_已取消继续输出。_', thinking: parsed.$1, modelLabel: modelLabel);
         } else if (!gotAnyChunk || raw.trim().isEmpty) {
-          updateAssistantMessage(id, 'AI 请求完成，但没有收到任何文本内容。请检查接口模式、模型 ID、流式输出兼容性，或关闭“流式输出”后重试。', modelLabel: modelLabel);
+          shouldRetry = true;
+          retryReason = 'AI 请求完成，但没有收到任何文本内容。请检查接口模式、模型 ID、流式输出兼容性，或关闭“流式输出”后重试。';
+          updateAssistantMessage(id, _retryMessage(retryReason), modelLabel: modelLabel);
         } else {
           final parsed = _extractThinking(raw);
           await _materializeAgentOutput(id, parsed.$2, parsed.$1, modelLabel);
+          turnOk = true;
         }
       } else {
         final text = await AiClient(cfg).sendChat(req);
         if (cancelRequested) {
+          wasCancelled = true;
           updateAssistantMessage(id, '已取消 AI 输出。', modelLabel: modelLabel);
         } else if (text.trim().isEmpty) {
-          updateAssistantMessage(id, 'AI 请求完成，但响应文本为空。请检查接口模式或模型返回格式。', modelLabel: modelLabel);
+          shouldRetry = true;
+          retryReason = 'AI 请求完成，但响应文本为空。请检查接口模式或模型返回格式。';
+          updateAssistantMessage(id, _retryMessage(retryReason), modelLabel: modelLabel);
         } else {
           final parsed = _extractThinking(text);
           await _materializeAgentOutput(id, parsed.$2, parsed.$1, modelLabel);
+          turnOk = true;
         }
       }
     } catch (e) {
-      updateAssistantMessage(id, 'AI 请求失败：\n\n```text\n$e\n```', modelLabel: modelLabel);
+      shouldRetry = true;
+      retryReason = '$e';
+      updateAssistantMessage(id, _retryMessage('AI 请求失败：$e'), modelLabel: modelLabel);
     } finally {
+      final stopRequested = cancelRequested || wasCancelled;
       busy = false;
       generationActive = false;
       cancelRequested = false;
       activeAssistantMessageId = null;
       notifyListeners();
       await _rewriteMemoryFromMessages();
-      if (agentMode == AgentMode.code && !_agentLoopRunning) {
+      if (agentMode == AgentMode.code && !stopRequested) {
+        if (turnOk) {
+          if (!isContinuation) _aiRetryCount = 0;
+        } else if (shouldRetry) {
+          Future.microtask(() => _retryAgentTurnIfNeeded(content, isContinuation: isContinuation, reason: retryReason));
+          return;
+        }
+      }
+      if (agentMode == AgentMode.code && !_agentLoopRunning && !stopRequested) {
         Future.microtask(_continueAgentLoopIfNeeded);
       }
     }
@@ -450,12 +477,31 @@ Future<void> runTerminalCommand(String command) async {
     notifyListeners();
   }
 
+  String _retryMessage(String reason) {
+    final next = _aiRetryCount + 1;
+    return 'AI 响应异常，正在自动重试 ($next/$_maxAiRetries)：\n\n```text\n$reason\n```';
+  }
+
+  Future<void> _retryAgentTurnIfNeeded(String content, {required bool isContinuation, required String reason}) async {
+    if (agentMode != AgentMode.code || cancelRequested) return;
+    if (_aiRetryCount >= _maxAiRetries) {
+      addAssistantMessage('AI 自动重试已达到最大次数 $_maxAiRetries，流程已安全停止。最后错误：\n\n```text\n$reason\n```');
+      await _rewriteMemoryFromMessages();
+      notifyListeners();
+      return;
+    }
+    _aiRetryCount += 1;
+    await Future.delayed(Duration(milliseconds: 700 * _aiRetryCount));
+    if (busy || generationActive || cancelRequested) return;
+    await _requestAgentTurn(content, isContinuation: isContinuation);
+  }
+
   Future<void> _continueAgentLoopIfNeeded() async {
     if (_agentLoopRunning || agentMode != AgentMode.code || busy || generationActive || cancelRequested) return;
     if (_isTodoComplete) return;
     if (!_hasActionNeedingContinuation) return;
     if (_agentLoopRound >= _maxAgentLoopRounds) {
-      addAssistantMessage('已达到自动 Agent 最大连续轮数 $_maxAgentLoopRounds。为避免死循环，已暂停自动继续。你可以检查当前任务状态后手动发送“继续”。');
+      addAssistantMessage('Agent 已连续自动执行 $_maxAgentLoopRounds 轮。为保护设备和接口资源，系统已安全停止本次自动流程；这不是让用户手动继续，而是防止异常无限循环的硬保护。');
       await _rewriteMemoryFromMessages();
       return;
     }
@@ -471,6 +517,7 @@ Future<void> runTerminalCommand(String command) async {
   bool get _isTodoComplete => todoPlan != null && todoPlan!.items.isNotEmpty && todoPlan!.items.every((e) => e.done);
 
   bool get _hasActionNeedingContinuation {
+    if (todoPlan != null && todoPlan!.items.isNotEmpty && !todoPlan!.items.every((e) => e.done)) return true;
     for (final m in messages.reversed.take(8)) {
       final hasRunning = m.toolCalls.any((t) => t.status == 'running' || t.status == 'pending') || m.changes.any((c) => c.status == 'pending' || c.status == 'running');
       if (hasRunning) return false;
