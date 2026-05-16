@@ -777,7 +777,7 @@ ${_toolUsageExample(call.tool)}''';
         : 'https://www.bing.com/search?q=${Uri.encodeQueryComponent(query.isEmpty ? _requiredString(call, 'query', 'Flutter') : query)}';
     final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
     final res = await http.get(uri, headers: {'User-Agent': 'Mozilla/5.0 LunaLink-Agent Browser'}).timeout(const Duration(seconds: 25));
-    if (res.statusCode < 200 || res.statusCode >= 400) throw StateError('Browser HTTP ${res.statusCode}: ${res.body.take(600)}');
+    if (res.statusCode < 200 || res.statusCode >= 400) throw StateError('Browser HTTP ${res.statusCode}: ${_clip(res.body, 600)}');
     final html = res.body;
     final title = RegExp(r'<title[^>]*>([\s\S]*?)<\/title>', caseSensitive: false).firstMatch(html)?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? uri.toString();
     final text = html
@@ -788,8 +788,10 @@ ${_toolUsageExample(call.tool)}''';
         .trim();
     browserSnapshot = BrowserSnapshot(url: uri.toString(), title: title, html: html, text: text, updatedAt: DateTime.now());
     notifyListeners();
-    return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${text.take(4000)}';
+    return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${_clip(text, 4000)}';
   }
+
+  String _clip(String value, int max) => value.length <= max ? value : value.substring(0, max);
 
   Future<String> _githubGenericRequest(ToolCallRecord call) async {
     final method = (call.arguments['method']?.toString() ?? 'GET').toUpperCase();
