@@ -376,9 +376,9 @@ class _HeroEmpty extends StatelessWidget {
         Text(isMtc ? 'MTC' : 'Code', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Text(isMtc ? '方案沟通模式' : '编码模式', style: const TextStyle(fontSize: 15, color: MoonColors.muted)),
-        if (state.servers.isNotEmpty) Padding(
+        if (state.servers.isNotEmpty && state.activeServerId != null) Padding(
           padding: const EdgeInsets.only(top: 18),
-          child: Text('已连接：${state.servers.firstWhere((e) => e.id == state.activeServerId, orElse: () => state.servers.first).name}', style: const TextStyle(fontSize: 13, color: MoonColors.ok)),
+          child: Text('已连接：${_serverName(state)}', style: const TextStyle(fontSize: 13, color: MoonColors.ok)),
         ),
       ]),
     ));
@@ -471,30 +471,52 @@ class _ThinkingBlock extends StatefulWidget {
 }
 
 class _ThinkingBlockState extends State<_ThinkingBlock> with SingleTickerProviderStateMixin {
-  late final AnimationController pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
+  late final AnimationController pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
   bool open = false;
   @override
   void dispose() { pulse.dispose(); super.dispose(); }
+
+  String get preview {
+    final oneLine = widget.thinking.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (oneLine.isEmpty) return widget.active ? '正在思考' : '思考过程';
+    return oneLine.length > 42 ? '${oneLine.substring(0, 42)}…' : oneLine;
+  }
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF7F8FC),
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: MoonColors.edge.withOpacity(.75)),
+    ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      GestureDetector(
+      InkWell(
         onTap: () => setState(() => open = !open),
-        child: FadeTransition(
-          opacity: Tween<double>(begin: .4, end: 1.0).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut)),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 14, color: MoonColors.muted),
-            const SizedBox(width: 3),
-            Text(widget.active ? '正在思考...' : '思考过程', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: MoonColors.muted)),
-          ]),
-        ),
+        borderRadius: BorderRadius.circular(10),
+        child: Row(children: [
+          FadeTransition(
+            opacity: Tween<double>(begin: .45, end: 1.0).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut)),
+            child: Text(widget.active ? '正在思考' : '思考', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: MoonColors.muted)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: MoonColors.muted))),
+          Icon(open ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded, size: 16, color: MoonColors.muted),
+        ]),
       ),
-      if (open) Container(
-        margin: const EdgeInsets.only(left: 6, top: 4),
-        padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
-        decoration: const BoxDecoration(border: Border(left: BorderSide(color: MoonColors.edge, width: 1.2))),
-        child: Text(widget.thinking, style: const TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.4)),
+      AnimatedCrossFade(
+        firstChild: const SizedBox.shrink(),
+        secondChild: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: MoonColors.edge.withOpacity(.7))),
+          child: SelectableText(widget.thinking, style: const TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.45)),
+        ),
+        crossFadeState: open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+        duration: const Duration(milliseconds: 180),
       ),
     ]),
   );
@@ -523,19 +545,67 @@ class _CodeBuilder extends MarkdownElementBuilder {
   Widget? visitElementAfter(dynamic element, TextStyle? preferredStyle) {
     if (element.tag != 'pre') return null;
     final text = element.textContent;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(color: const Color(0xFFF7F4FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2D8FF))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 4, 4, 0),
-          child: Row(children: [const Text('code', style: TextStyle(fontSize: 10, color: MoonColors.muted)), const Spacer(), InkWell(onTap: () => Clipboard.setData(ClipboardData(text: text)), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.copy_rounded, size: 14, color: MoonColors.muted)))]),
-        ),
-        Padding(padding: const EdgeInsets.fromLTRB(10, 2, 10, 10), child: SelectableText(text, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: MoonColors.text, height: 1.35))),
-      ]),
-    );
+    return _HoverCopyCodeBlock(text: text);
   }
+}
+
+class _HoverCopyCodeBlock extends StatefulWidget {
+  final String text;
+  const _HoverCopyCodeBlock({required this.text});
+  @override
+  State<_HoverCopyCodeBlock> createState() => _HoverCopyCodeBlockState();
+}
+
+class _HoverCopyCodeBlockState extends State<_HoverCopyCodeBlock> {
+  bool showCopy = false;
+  void _setVisible(bool v) { if (mounted) setState(() => showCopy = v); }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTapDown: (_) => _setVisible(true),
+    onLongPressStart: (_) => _setVisible(true),
+    child: MouseRegion(
+      onEnter: (_) => _setVisible(true),
+      onExit: (_) => _setVisible(false),
+      child: Stack(children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.fromLTRB(10, 28, 10, 10),
+          decoration: BoxDecoration(color: const Color(0xFFF7F4FF), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2D8FF))),
+          child: SelectableText(widget.text, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: MoonColors.text, height: 1.35)),
+        ),
+        Positioned(
+          top: 10,
+          left: 10,
+          child: const Text('code', style: TextStyle(fontSize: 10, color: MoonColors.muted)),
+        ),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: AnimatedOpacity(
+            opacity: showCopy ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            child: IgnorePointer(
+              ignoring: !showCopy,
+              child: Material(
+                color: Colors.white.withOpacity(.92),
+                borderRadius: BorderRadius.circular(9),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(9),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: widget.text));
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('代码已复制'), duration: Duration(milliseconds: 900)));
+                  },
+                  child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.copy_rounded, size: 15, color: MoonColors.muted)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]),
+    ),
+  );
 }
 
 // ─── Tool Card ───
@@ -626,9 +696,7 @@ class _Composer extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final cfg = state.activeAiConfig;
-    final serverLabel = state.activeServerId == null
-        ? 'Cloud'
-        : state.servers.firstWhere((e) => e.id == state.activeServerId, orElse: () => state.servers.first).name;
+    final serverLabel = _serverName(state);
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
       child: Container(
@@ -656,6 +724,14 @@ class _Composer extends StatelessWidget {
       ),
     );
   }
+}
+
+String _serverName(AppState state) {
+  if (state.activeServerId == null || state.servers.isEmpty) return 'Cloud';
+  for (final s in state.servers) {
+    if (s.id == state.activeServerId) return s.name;
+  }
+  return 'Cloud';
 }
 
 class _ModelPill extends StatelessWidget {

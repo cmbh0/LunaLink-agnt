@@ -577,7 +577,22 @@ Future<void> runTerminalCommand(String command) async {
     }).toList();
   }
 
-  AiServiceConfig get activeAiConfig => aiConfigs.firstWhere((e) => e.id == selectedAiConfigId, orElse: () => aiConfigs.first);
+  AiServiceConfig get activeAiConfig {
+    if (aiConfigs.isEmpty) {
+      const fallback = AiServiceConfig(
+        id: 'default-openai',
+        name: 'OpenAI Compatible',
+        provider: AiProviderType.openai,
+        endpoint: 'https://api.openai.com/v1',
+        apiKey: '',
+        model: 'gpt-4.1',
+      );
+      aiConfigs.add(fallback);
+      selectedAiConfigId = fallback.id;
+      return fallback;
+    }
+    return aiConfigs.firstWhere((e) => e.id == selectedAiConfigId, orElse: () => aiConfigs.first);
+  }
 
   Future<void> setActiveAiConfig(String id) async {
     selectedAiConfigId = id;
