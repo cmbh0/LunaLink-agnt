@@ -12,6 +12,7 @@ import 'connect_screen.dart';
 import 'file_manager_screen.dart';
 import 'github_settings_screen.dart';
 import 'terminal_screen.dart';
+import 'workspace_screen.dart';
 
 class AgentChatScreen extends StatefulWidget {
   final bool embedded;
@@ -554,7 +555,8 @@ class _TopBar extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white.withOpacity(.96), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 8, offset: const Offset(0, 2))]),
       child: Row(children: [
         SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '对话历史')),
-        SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 19), padding: EdgeInsets.zero, tooltip: '文件管理')),
+        SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Icon(Icons.workspaces_outline, size: 19), padding: EdgeInsets.zero, tooltip: '本地工作区')),
+SizedBox(width: 36, height: 36, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 19), padding: EdgeInsets.zero, tooltip: '文件管理')),
         const Spacer(),
         Container(
           padding: const EdgeInsets.all(2),

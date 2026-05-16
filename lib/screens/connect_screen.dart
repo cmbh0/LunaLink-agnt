@@ -18,6 +18,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   final user = TextEditingController(text: 'root');
   final pass = TextEditingController();
   final root = TextEditingController(text: '/');
+  ServerAccessMode mode = ServerAccessMode.linux;
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +26,17 @@ class _ConnectScreenState extends State<ConnectScreen> {
     return Scaffold(
       appBar: widget.fullPage ? AppBar(title: const Text('Cloud 服务器')) : null,
       body: ListView(padding: const EdgeInsets.all(16), children: [
-      const Text('连接 Linux 服务器', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-      const SizedBox(height: 12),
+const Text('连接服务器 / 虚拟主机', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+       const SizedBox(height: 12),
+       DropdownButtonFormField<ServerAccessMode>(
+         value: mode,
+         decoration: const InputDecoration(labelText: '连接模式'),
+         items: ServerAccessMode.values.map((e) => DropdownMenuItem(value: e, child: Text(e.label))).toList(),
+         onChanged: (v) => setState(() { mode = v ?? ServerAccessMode.linux; port.text = mode == ServerAccessMode.ftp ? '21' : '22'; }),
+       ),
       TextField(controller: host, decoration: const InputDecoration(labelText: 'Host / IP')),
       const SizedBox(height: 10),
-      Row(children: [Expanded(child: TextField(controller: port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'SSH Port'))), const SizedBox(width: 10), Expanded(child: TextField(controller: user, decoration: const InputDecoration(labelText: 'Username')))]),
+      Row(children: [Expanded(child: TextField(controller: port, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: mode == ServerAccessMode.ftp ? 'FTP Port' : 'SSH/SFTP Port'))), const SizedBox(width: 10), Expanded(child: TextField(controller: user, decoration: const InputDecoration(labelText: 'Username')))]),
       const SizedBox(height: 10),
       TextField(controller: pass, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
       const SizedBox(height: 10),
@@ -37,20 +44,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
       const SizedBox(height: 18),
 FilledButton.icon(
          onPressed: state.busy ? null : () async {
-           final profile = ServerProfile(id: const Uuid().v4(), name: host.text, host: host.text.trim(), port: int.tryParse(port.text) ?? 22, username: user.text.trim(), password: pass.text, rootPath: root.text.trim().isEmpty ? '/' : root.text.trim());
+           final profile = ServerProfile(id: const Uuid().v4(), name: host.text.trim(), host: host.text.trim(), port: int.tryParse(port.text) ?? (mode == ServerAccessMode.ftp ? 21 : 22), username: user.text.trim(), password: pass.text, rootPath: root.text.trim().isEmpty ? '/' : root.text.trim(), mode: mode);
            await context.read<AppState>().connect(profile, persistAutoReconnect: state.autoReconnect);
            if (context.mounted && !widget.fullPage) Navigator.maybePop(context);
          },
          icon: state.busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.link_rounded),
-         label: const Text('连接并读取服务器信息'),
-       ),
-       CheckboxListTile(
-         contentPadding: EdgeInsets.zero,
-         value: state.autoReconnect,
-         onChanged: (v) => context.read<AppState>().setAutoReconnect(v ?? false),
-         title: const Text('下次启动自动连接此服务器'),
-         subtitle: const Text('默认关闭；只有勾选后再连接才会自动重连。'),
-       ),
+label: Text(mode.terminalEnabled ? '连接并读取服务器信息' : '连接文件服务'),
+        ),
        if (state.activeServerId != null) Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => context.read<AppState>().disconnectServer(), icon: const Icon(Icons.link_off_rounded), label: const Text('断开并关闭自动连接'))),
       const SizedBox(height: 18),
       if (state.servers.isNotEmpty) ...[
@@ -59,8 +59,20 @@ FilledButton.icon(
         for (final s in state.servers) Card(child: ListTile(
           leading: Icon(state.activeServerId == s.id ? Icons.cloud_done_rounded : Icons.cloud_queue_rounded),
           title: Text(s.name),
-          subtitle: Text('${s.username}@${s.host}:${s.port} · ${s.rootPath}'),
-          trailing: state.activeServerId == s.id ? const Text('当前') : TextButton(onPressed: () => context.read<AppState>().switchServer(s.id), child: const Text('连接')),
+          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${s.username}@${s.host}:${s.port} · ${s.rootPath}'),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<bool>(
+              value: s.autoConnect,
+              decoration: const InputDecoration(labelText: '启动时自动连接', isDense: true),
+              items: const [DropdownMenuItem(value: false, child: Text('不自动连接')), DropdownMenuItem(value: true, child: Text('自动连接此项'))],
+              onChanged: (v) => context.read<AppState>().updateServerAutoConnect(s.id, v ?? false),
+            ),
+          ]),
+          trailing: Wrap(spacing: 4, children: [
+            if (state.activeServerId == s.id) const Padding(padding: EdgeInsets.only(top: 8), child: Text('当前')) else TextButton(onPressed: () => context.read<AppState>().switchServer(s.id), child: const Text('连接')),
+            IconButton(onPressed: () => context.read<AppState>().deleteServer(s.id), icon: const Icon(Icons.delete_outline_rounded, color: MoonColors.danger)),
+          ]),
         )),
       ],
       if (state.serverInfo != null) _InfoCard(info: state.serverInfo!),

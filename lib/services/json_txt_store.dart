@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 class JsonTxtStore {
   static const _root = 'lunalink_store';
 
+  Future<Directory> baseDirectory() async => getApplicationDocumentsDirectory();
+
   Future<Directory> _dir(String scope) async {
     final base = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(base.path, _root, scope));

@@ -1,5 +1,16 @@
 enum AuthType { password, privateKey }
 
+enum ServerAccessMode { linux, sftp, ftp }
+
+extension ServerAccessModeLabel on ServerAccessMode {
+  String get label => switch (this) {
+        ServerAccessMode.linux => 'Linux 服务器（SSH + SFTP + 终端）',
+        ServerAccessMode.sftp => 'SFTP 文件模式（禁用终端）',
+        ServerAccessMode.ftp => '虚拟主机 FTP 模式（禁用终端）',
+      };
+  bool get terminalEnabled => this == ServerAccessMode.linux;
+}
+
 class ServerProfile {
   final String id;
   final String name;
@@ -10,6 +21,8 @@ class ServerProfile {
   final String? password;
   final String? privateKey;
   final String rootPath;
+  final ServerAccessMode mode;
+  final bool autoConnect;
 
   const ServerProfile({
     required this.id,
@@ -21,6 +34,8 @@ class ServerProfile {
     this.password,
     this.privateKey,
     this.rootPath = '/',
+    this.mode = ServerAccessMode.linux,
+    this.autoConnect = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -33,6 +48,8 @@ class ServerProfile {
         'password': password,
         'privateKey': privateKey,
         'rootPath': rootPath,
+        'mode': mode.name,
+        'autoConnect': autoConnect,
       };
 
   factory ServerProfile.fromJson(Map<String, dynamic> json) => ServerProfile(
@@ -48,6 +65,8 @@ class ServerProfile {
         password: json['password'] as String?,
         privateKey: json['privateKey'] as String?,
         rootPath: json['rootPath'] as String? ?? '/',
+        mode: ServerAccessMode.values.firstWhere((e) => e.name == json['mode'], orElse: () => ServerAccessMode.linux),
+        autoConnect: json['autoConnect'] as bool? ?? false,
       );
 }
 

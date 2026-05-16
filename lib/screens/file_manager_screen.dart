@@ -1,6 +1,6 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../models/server_models.dart';
 import '../services/app_state.dart';
@@ -107,7 +107,7 @@ class _TreeTile extends StatelessWidget {
                 const PopupMenuItem(value: 'rename', child: Text('重命名')),
                 const PopupMenuItem(value: 'duplicate', child: Text('复制')),
                 const PopupMenuItem(value: 'chmod', child: Text('权限 chmod')),
-                const PopupMenuItem(value: 'download', child: Text('下载到应用目录')),
+                if (entry.isDirectory) const PopupMenuItem(value: 'download', child: Text('下载到默认下载目录')),
                 if (isBak) const PopupMenuItem(value: 'restore', child: Text('从备份还原')),
                 const PopupMenuItem(value: 'delete', child: Text('删除')),
               ],
@@ -130,7 +130,7 @@ class _TreeTile extends StatelessWidget {
     } else if (action == 'chmod') {
       final mode = await _askName(context, '权限 chmod', initial: '755'); if (mode != null && mode.trim().isNotEmpty) await state.chmodRemote(entry, mode.trim());
     } else if (action == 'download') {
-      final dir = await getApplicationDocumentsDirectory(); final file = await state.downloadRemoteFile(entry, dir); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已下载到 ${file.path}')));
+      final dir = Directory('/storage/emulated/0/download'); if (!await dir.exists()) await dir.create(recursive: true); final file = await state.downloadRemoteFile(entry, dir); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已下载到 ${file.path}')));
     } else if (action == 'delete') {
       final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('确认删除'), content: Text(entry.path), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除'))]));
       if (ok == true) await state.deleteRemote(entry);

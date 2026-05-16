@@ -189,6 +189,15 @@ class AgentMessage {
       );
 }
 
+class LocalWorkspace {
+  final String id;
+  final String name;
+  final String path;
+  const LocalWorkspace({required this.id, required this.name, required this.path});
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'path': path};
+  factory LocalWorkspace.fromJson(Map<String, dynamic> json) => LocalWorkspace(id: json['id'] as String? ?? '', name: json['name'] as String? ?? 'workspace', path: json['path'] as String? ?? '');
+}
+
 class BrowserSnapshot {
   final String url;
   final String title;

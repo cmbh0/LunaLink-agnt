@@ -18,10 +18,12 @@ class AppState extends ChangeNotifier {
   final aiConfigs = <AiServiceConfig>[];
   final messages = <AgentMessage>[];
   final conversations = <ConversationMeta>[];
+  final localWorkspaces = <LocalWorkspace>[];
   final terminalLogs = <String>['LunaLink SSH Terminal ready.'];
   BrowserSnapshot? browserSnapshot;
   GitHubConfig github = const GitHubConfig();
   String? activeServerId;
+  String? boundWorkspaceId;
   bool autoReconnect = false;
   bool generationActive = false;
   bool cancelRequested = false;
@@ -41,6 +43,20 @@ class AppState extends ChangeNotifier {
   static const int _maxAgentLoopRounds = 50;
   static const int _maxAiRetries = 5;
   String? selectedAiConfigId;
+
+  LocalWorkspace? get activeWorkspace {
+    final id = boundWorkspaceId;
+    if (id == null) return null;
+    final matches = localWorkspaces.where((e) => e.id == id).toList();
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  bool get terminalEnabled {
+    final id = activeServerId;
+    if (id == null) return false;
+    final matches = servers.where((e) => e.id == id).toList();
+    return matches.isNotEmpty && matches.first.mode.terminalEnabled;
+  }
 
   AppState() {
     aiConfigs.add(const AiServiceConfig(
@@ -70,12 +86,18 @@ class AppState extends ChangeNotifier {
     activeServerId = serverDoc['activeServerId'] as String?;
     autoReconnect = serverDoc['autoReconnect'] as bool? ?? false;
     final savedConversationId = convDoc['activeConversationId'] as String?;
+    final workspaceDoc = await store.readMap('profiles', 'workspaces', fallback: {'items': <dynamic>[], 'bindings': <String, dynamic>{}});
+    localWorkspaces
+      ..clear()
+      ..addAll((workspaceDoc['items'] as List? ?? []).whereType<Map>().map((e) => LocalWorkspace.fromJson(Map<String, dynamic>.from(e))));
+    final bindings = Map<String, dynamic>.from(workspaceDoc['bindings'] as Map? ?? {});
     if (savedConversationId != null && conversations.any((e) => e.id == savedConversationId)) {
       conversationId = savedConversationId;
     } else if (conversations.isNotEmpty) {
       conversationId = conversations.first.id;
     }
     await _loadConversationMessages(conversationId);
+    boundWorkspaceId = bindings[conversationId] as String?;
     final githubDoc = await store.readMap('profiles', 'github', fallback: const {});
     github = GitHubConfig.fromJson(githubDoc);
     final activeAiDoc = await store.readMap('profiles', 'active_ai', fallback: const {});
@@ -88,8 +110,9 @@ class AppState extends ChangeNotifier {
         ..addAll(aiItems.whereType<Map>().map((e) => AiServiceConfig.fromJson(Map<String, dynamic>.from(e))));
     }
     notifyListeners();
-    if (autoReconnect && activeServerId != null && servers.any((e) => e.id == activeServerId)) {
-      Future.microtask(() => connect(servers.firstWhere((e) => e.id == activeServerId!), persistAutoReconnect: true));
+    if (autoReconnect) {
+      final candidates = servers.where((e) => e.autoConnect || e.id == activeServerId).toList();
+      if (candidates.isNotEmpty) Future.microtask(() => connect(candidates.first, persistAutoReconnect: true));
     }
   }
 
@@ -156,10 +179,107 @@ class AppState extends ChangeNotifier {
     conversationId = id;
     await store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList(), 'activeConversationId': conversationId});
     await _loadConversationMessages(id);
+    final workspaceDoc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}});
+    final bindings = Map<String, dynamic>.from(workspaceDoc['bindings'] as Map? ?? {});
+    boundWorkspaceId = bindings[id] as String?;
     notifyListeners();
   }
 
   Future<void> _saveConversations() => store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList(), 'activeConversationId': conversationId});
+
+  Future<void> _saveWorkspaces() async {
+    final doc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}});
+    final bindings = Map<String, dynamic>.from(doc['bindings'] as Map? ?? {});
+    if (boundWorkspaceId == null) { bindings.remove(conversationId); } else { bindings[conversationId] = boundWorkspaceId; }
+    await store.writeMap('profiles', 'workspaces', {'items': localWorkspaces.map((e) => e.toJson()).toList(), 'bindings': bindings});
+  }
+
+  Future<Directory> _workspaceRoot() async {
+    final base = await store.baseDirectory();
+    final dir = Directory(p.join(base.path, 'local_workspaces'));
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  Future<void> createLocalWorkspace(String name) async {
+    final id = const Uuid().v4();
+    final root = await _workspaceRoot();
+    final dir = Directory(p.join(root.path, id));
+    await Directory(p.join(dir.path, '.backup')).create(recursive: true);
+    final ws = LocalWorkspace(id: id, name: name.trim().isEmpty ? 'workspace' : name.trim(), path: dir.path);
+    localWorkspaces.add(ws);
+    boundWorkspaceId = id;
+    await _saveWorkspaces();
+    notifyListeners();
+  }
+
+  Future<void> bindWorkspace(String? id) async { boundWorkspaceId = id; await _saveWorkspaces(); notifyListeners(); }
+
+  Future<List<RemoteFileEntry>> listLocalWorkspace() async {
+    final ws = activeWorkspace;
+    if (ws == null) return const [];
+    final dir = Directory(ws.path);
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final out = <RemoteFileEntry>[];
+    await for (final e in dir.list()) {
+      final name = p.basename(e.path);
+      if (name == '.backup' || name.endsWith('.bak')) continue;
+      final stat = await e.stat();
+      out.add(RemoteFileEntry(name: name, path: e.path, isDirectory: stat.type == FileSystemEntityType.directory, size: stat.size, modified: stat.modified));
+    }
+    out.sort((a, b) => a.isDirectory == b.isDirectory ? a.name.compareTo(b.name) : (a.isDirectory ? -1 : 1));
+    return out;
+  }
+
+  Future<void> deleteLocalWorkspace(String id) async {
+    final index = localWorkspaces.indexWhere((e) => e.id == id);
+    if (index < 0) return;
+    final ws = localWorkspaces.removeAt(index);
+    if (boundWorkspaceId == id) boundWorkspaceId = null;
+    final dir = Directory(ws.path);
+    if (await dir.exists()) await dir.delete(recursive: true);
+    await _saveWorkspaces();
+    notifyListeners();
+  }
+
+  Future<void> createLocalWorkspaceEntry(String name, {bool directory = false}) async {
+    final ws = activeWorkspace;
+    if (ws == null) throw StateError('No local workspace bound. 简单来说就是当前对话还没有绑定本地工作区。');
+    final target = File(p.join(ws.path, name));
+    if (directory) {
+      await Directory(target.path).create(recursive: true);
+    } else {
+      await target.create(recursive: true);
+    }
+    notifyListeners();
+  }
+
+  Future<void> writeLocalWorkspaceFile(String relativePath, String content) async {
+    final ws = activeWorkspace;
+    if (ws == null) throw StateError('No local workspace bound. 简单来说就是当前对话还没有绑定本地工作区。');
+    final safe = _safeWorkspacePath(ws.path, relativePath);
+    final file = File(safe);
+    if (await file.exists()) {
+      final backup = File(p.join(ws.path, '.backup', '${p.basename(relativePath)}.${DateTime.now().millisecondsSinceEpoch}.bak'));
+      await backup.create(recursive: true);
+      await backup.writeAsBytes(await file.readAsBytes());
+    }
+    await file.create(recursive: true);
+    await file.writeAsString(content);
+    notifyListeners();
+  }
+
+  Future<String> readLocalWorkspaceFile(String relativePath) async {
+    final ws = activeWorkspace;
+    if (ws == null) throw StateError('No local workspace bound. 简单来说就是当前对话还没有绑定本地工作区。');
+    return File(_safeWorkspacePath(ws.path, relativePath)).readAsString();
+  }
+
+  String _safeWorkspacePath(String root, String relativePath) {
+    final clean = relativePath.replaceAll('\\', '/');
+    if (clean.contains('..') || clean.startsWith('/') || clean.split('/').contains('.backup')) throw StateError('Unsafe local workspace path. Do not access parent or .backup.');
+    return p.join(root, clean);
+  }
 
   Future<void> _loadConversationMessages(String id) async {
     final doc = await store.readMap('memory', id, fallback: {'events': <dynamic>[]});
@@ -190,6 +310,30 @@ class AppState extends ChangeNotifier {
     await connect(profile);
   }
 
+  Future<void> deleteServer(String id) async {
+    servers.removeWhere((e) => e.id == id);
+    if (activeServerId == id) {
+      await ssh.disconnect();
+      activeServerId = null;
+      serverInfo = null;
+      files = [];
+    }
+    if (!servers.any((e) => e.autoConnect)) autoReconnect = false;
+    await _saveServers();
+    notifyListeners();
+  }
+
+  Future<void> updateServerAutoConnect(String id, bool enabled) async {
+    for (var i = 0; i < servers.length; i++) {
+      final s = servers[i];
+      servers[i] = ServerProfile(id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, authType: s.authType, password: s.password, privateKey: s.privateKey, rootPath: s.rootPath, mode: s.mode, autoConnect: enabled && s.id == id);
+    }
+    autoReconnect = enabled;
+    if (enabled) activeServerId = id;
+    await _saveServers();
+    notifyListeners();
+  }
+
   Future<T> withReconnect<T>(Future<T> Function() action) async {
     try {
       return await action();
@@ -210,11 +354,12 @@ class AppState extends ChangeNotifier {
       await ssh.connect(profile);
       activeServerId = profile.id;
       if (persistAutoReconnect != null) autoReconnect = persistAutoReconnect;
-      serverInfo = await ssh.readInfo();
+      serverInfo = profile.mode.terminalEnabled ? await ssh.readInfo() : null;
       currentPath = profile.rootPath;
       files = await ssh.listDir(currentPath);
+      final duplicate = servers.indexWhere((e) => e.id != profile.id && e.host == profile.host && e.port == profile.port && e.username == profile.username && e.mode == profile.mode);
       final index = servers.indexWhere((e) => e.id == profile.id);
-      if (index >= 0) { servers[index] = profile; } else { servers.add(profile); }
+      if (duplicate >= 0) { servers[duplicate] = profile; activeServerId = profile.id; } else if (index >= 0) { servers[index] = profile; } else { servers.add(profile); }
       await _saveServers();
     } finally {
       busy = false;
@@ -286,6 +431,11 @@ Future<void> sendTerminalKey(String sequence, String label) async {
   }
 
   Future<void> runTerminalCommand(String command) async {
+    if (!terminalEnabled) {
+      terminalLogs.add('ERROR: Terminal disabled. Current connection mode is SFTP/FTP virtual host or no Linux SSH server is connected.');
+      notifyListeners();
+      return;
+    }
     terminalLogs.add('\$ $command');
     notifyListeners();
     final id = const Uuid().v4();
@@ -552,12 +702,28 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     String output;
     try {
       switch (call.tool) {
+        case 'local_list_files':
+          final list = await listLocalWorkspace();
+          output = list.map((e) => '${e.isDirectory ? 'd' : '-'} ${e.name} ${e.size}').join('\n');
+          break;
+        case 'local_read_file':
+          output = await readLocalWorkspaceFile(_requiredString(call, 'path', 'README.md'));
+          break;
+        case 'local_write_file':
+          await writeLocalWorkspaceFile(_requiredString(call, 'path', 'README.md'), call.arguments['content'] as String? ?? '');
+          output = 'local file written with .backup snapshot if overwritten';
+          break;
+        case 'local_mkdir':
+          await createLocalWorkspaceEntry(_requiredString(call, 'path', 'src'), directory: true);
+          output = 'local directory created';
+          break;
         case 'terminal_exec':
         case 'run_command':
         case 'shell':
         case 'bash':
         case 'ssh_command':
         case 'ssh_exec':
+          if (!terminalEnabled) throw StateError('No Linux SSH server connected / terminal disabled. Use file tools only for SFTP/FTP virtual-host mode. 简单来说就是你没有连接 Linux 服务器，当前模式不能执行终端命令。');
           final command = _firstString(call.arguments, ['command', 'cmd', 'script', 'bash', 'shell'], 'ls -la');
           output = await ssh.exec(command);
           terminalLogs.add('\$ $command');
@@ -735,6 +901,8 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     'mv': 'move_file', 'rename': 'move_file',
     'rm': 'delete_file', 'remove_file': 'delete_file',
     'create_dir': 'mkdir', 'make_directory': 'mkdir',
+    'local_ls': 'local_list_files', 'workspace_list_files': 'local_list_files', 'local_cat': 'local_read_file', 'workspace_read_file': 'local_read_file',
+    'local_write': 'local_write_file', 'workspace_write_file': 'local_write_file', 'local_create_file': 'local_write_file', 'local_create_dir': 'local_mkdir', 'workspace_mkdir': 'local_mkdir',
     'browser': 'browser_open', 'web': 'browser_open', 'open_url': 'browser_open', 'browser_open': 'browser_open', 'web_open': 'browser_open',
     'search': 'web_search', 'web_search': 'web_search', 'browser_search': 'web_search',
     'github_api': 'github_api', 'github_request': 'github_api',
@@ -765,6 +933,7 @@ ${_toolUsageExample(call.tool)}
 工具：${call.tool}
 参数：${jsonEncode(call.arguments)}
 原因：$error
+简单来说就是：${_plainToolError(call, error)}
 请严格按照工具 schema 调用，并提供所有必需参数。如果参数缺失或类型错误，请修正后再重试。
 正确调用示例：
 ${_toolUsageExample(call.tool)}''';
@@ -801,11 +970,23 @@ ${_toolUsageExample(call.tool)}''';
     return _githubRequest(method, path, body: body);
   }
 
+  String _plainToolError(ToolCallRecord call, Object error) {
+    final text = error.toString();
+    if (text.contains('SSH is not connected') || text.contains('No Linux SSH server') || text.contains('terminal disabled')) return '你没有连接 Linux 服务器，或者当前是 SFTP/虚拟主机模式，所以不能执行终端命令。';
+    if (text.contains('Missing required parameter')) return '你的工具参数少了必填字段，请按示例补齐。';
+    if (call.tool.startsWith('github') && text.contains('Token')) return 'GitHub Token 没有配置或无效。';
+    return '这次工具调用格式或当前环境不满足要求，请参考上面的正确示例重新调用。';
+  }
+
   String _toolUsageExample(String tool) {
     final args = switch (tool) {
       'browser_open' => {'url': 'https://example.com'},
       'web_search' => {'query': 'Flutter WebView'},
       'github_api' => {'method': 'GET', 'path': '/user', 'body': <String, dynamic>{}},
+      'local_list_files' => <String, dynamic>{},
+      'local_read_file' => {'path': 'README.md'},
+      'local_write_file' => {'path': 'README.md', 'content': '...'},
+      'local_mkdir' => {'path': 'src'},
       'ssh_exec' => {'command': 'ls -la'},
       'terminal_wait' => {'delayMs': 3000},
       'list_files' => {'path': '/home/user'},

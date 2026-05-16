@@ -264,6 +264,8 @@ class AgentSystemPrompt {
 - `ssh_exec` 是真实 SSH 远程命令执行工具，参数为：`{"command":"pwd && ls -la"}`。
 - 如果要创建/读取/修改/删除文件，优先使用文件工具：write_file/read_file/replace_file_text/move_file/delete_file/mkdir。
 
+- 本地工作区工具（每个对话可绑定一个工作区，禁止访问 .backup）：local_list_files `{}`，local_read_file `{"path":"README.md"}`，local_write_file `{"path":"src/main.txt","content":"..."}`，local_mkdir `{"path":"src"}`。
+
 ## 可用工具调用格式
 你可以通过以下格式发起工具调用，应用会根据用户授权策略执行：
 <tool>{"tool":"工具名","arguments":{...}}</tool>
