@@ -553,7 +553,7 @@ Future<void> sendTerminalKey(String sequence, String label) async {
         ? '当前是 MTC 方案沟通模式：只能聊天和整理需求，禁止输出 <tool> 或 <file_change>，禁止要求应用执行任何工具调用。你需要专注需求澄清、架构方案、UI/UX 设计和风险评估。'
         : '当前是 Code 编码模式：必须按照持续 Agent 工作流推进：先规划 todo，再执行工具；工具结果会自动回传给你；todo 未全部 done 前必须继续下一步；全部 done 后输出最终总结并停止。当前授权策略：${permissionMode.name}。';
     final localHint = activeWorkspace == null ? '未绑定本地工作区' : '${activeWorkspace!.name} (${activeWorkspace!.path})';
-    final cloudHint = boundCloudWorkspace == null ? '未绑定 Cloud 工作目录' : '${boundCloudWorkspace!.path}';
+    final cloudHint = boundCloudWorkspace?.path ?? '未绑定 Cloud 工作目录';
     final prompt = '$modeGuide\n开发环境：${developmentEnvironment.label}\n当前远程目录：$currentPath\n本地工作区：$localHint\nCloud 工作目录绑定：$cloudHint\n${isContinuation ? '系统继续请求：工具/文件操作结果已写入上文，请根据最新结果继续执行任务。如果目标完成，请输出全部 done 的 <todo> 和最终总结；如果未完成，请继续输出下一步需要的 <tool> 或 <file_change>。' : '用户任务：$content'}';
     final modelLabel = '${cfg.name} · ${cfg.model}';
     final id = addAssistantMessage('', modelLabel: modelLabel);
