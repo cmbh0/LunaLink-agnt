@@ -548,13 +548,18 @@ Future<void> sendTerminalKey(String sequence, String label) async {
   Future<void> executeTool(String toolCallId) async {
     final found = _findTool(toolCallId);
     if (found == null) return;
-    final call = found.$2;
+    final call = _normalizeToolCall(found.$2);
     _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'running', output: call.output));
     String output;
     try {
       switch (call.tool) {
+        case 'terminal_exec':
+        case 'run_command':
+        case 'shell':
+        case 'bash':
+        case 'ssh_command':
         case 'ssh_exec':
-          final command = _requiredString(call, 'command', 'ls -la');
+          final command = _firstString(call.arguments, ['command', 'cmd', 'script', 'bash', 'shell'], 'ls -la');
           output = await ssh.exec(command);
           terminalLogs.add('\$ $command');
           terminalLogs.add(output.trim().isEmpty ? '[no output]' : output);
@@ -564,15 +569,23 @@ Future<void> sendTerminalKey(String sequence, String label) async {
           await Future.delayed(Duration(milliseconds: delay.clamp(0, 30000)));
           output = terminalLogs.take(80).join('\n');
           break;
+        case 'ls':
+        case 'dir':
+        case 'list_dir':
         case 'list_files':
           final path = call.arguments['path'] as String? ?? currentPath;
           final list = await ssh.listDir(path);
           output = list.map((e) => '${e.isDirectory ? 'd' : '-'} ${e.name} ${e.size}').join('\n');
           break;
+        case 'cat':
+        case 'read':
         case 'read_file':
           final bytes = await ssh.readFile(_requiredString(call, 'path', '/home/user/project/main.dart'));
           output = utf8.decode(bytes, allowMalformed: true);
           break;
+        case 'write':
+        case 'save_file':
+        case 'create_file':
         case 'write_file':
           final path = _requiredString(call, 'path', '/path/file');
           final content = call.arguments['content'] as String? ?? '';
@@ -585,6 +598,9 @@ Future<void> sendTerminalKey(String sequence, String label) async {
           output = 'written with .bak backup';
           await refreshFiles();
           break;
+        case 'replace':
+        case 'edit_file':
+        case 'replace_text':
         case 'replace_file_text':
           final path = _requiredString(call, 'path', '/path/file');
           final oldText = _requiredString(call, 'oldText', '旧文本');
@@ -599,16 +615,22 @@ Future<void> sendTerminalKey(String sequence, String label) async {
           output = 'replaced text in $path';
           await refreshFiles();
           break;
+        case 'mv':
+        case 'rename':
         case 'move_file':
           await ssh.rename(_requiredString(call, 'from', '/old/path'), _requiredString(call, 'to', '/new/path'));
           output = 'moved';
           await refreshFiles();
           break;
+        case 'rm':
+        case 'remove_file':
         case 'delete_file':
           await ssh.delete(_requiredString(call, 'path', '/path/file'), directory: call.arguments['directory'] == true);
           output = 'deleted';
           await refreshFiles();
           break;
+        case 'create_dir':
+        case 'make_directory':
         case 'mkdir':
           await ssh.mkdir(_requiredString(call, 'path', '/path/dir'));
           output = 'directory created';
@@ -617,9 +639,12 @@ Future<void> sendTerminalKey(String sequence, String label) async {
         case 'github_status':
           output = github.isConnected ? 'GitHub token configured. Use github_verify_token to validate current user.' : 'GitHub token not configured.';
           break;
+        case 'github_user':
+        case 'github_me':
         case 'github_verify_token':
           output = await testGitHubConnection();
           break;
+        case 'github_repos':
         case 'github_list_repos':
           output = await _githubRequest('GET', '/user/repos?visibility=${call.arguments['visibility'] ?? 'all'}&per_page=${call.arguments['per_page'] ?? 30}');
           break;
@@ -630,9 +655,12 @@ Future<void> sendTerminalKey(String sequence, String label) async {
             if ((call.arguments['description'] as String?)?.isNotEmpty == true) 'description': call.arguments['description'],
           });
           break;
+        case 'github_repo':
         case 'github_get_repo':
           output = await _githubRequest('GET', '/repos/${_requiredString(call, 'owner', 'user')}/${_requiredString(call, 'repo', 'repo')}');
           break;
+        case 'github_write_file':
+        case 'github_put_file':
         case 'github_create_or_update_file':
           output = await _githubCreateOrUpdateFile(
             owner: _requiredString(call, 'owner', 'user'),
@@ -643,6 +671,8 @@ Future<void> sendTerminalKey(String sequence, String label) async {
             branch: call.arguments['branch'] as String? ?? 'main',
           );
           break;
+        case 'github_run_workflow':
+        case 'github_actions_dispatch':
         case 'github_dispatch_workflow':
           output = await _githubDispatchWorkflow(
             owner: _requiredString(call, 'owner', 'user'),
@@ -652,6 +682,8 @@ Future<void> sendTerminalKey(String sequence, String label) async {
             inputs: Map<String, dynamic>.from(call.arguments['inputs'] as Map? ?? {'build_mode': 'release'}),
           );
           break;
+        case 'github_actions_runs':
+        case 'github_workflow_runs':
         case 'github_list_runs':
           output = await _githubRequest('GET', '/repos/${_requiredString(call, 'owner', 'user')}/${_requiredString(call, 'repo', 'repo')}/actions/runs?per_page=${call.arguments['per_page'] ?? 5}');
           break;
@@ -670,6 +702,36 @@ Future<void> sendTerminalKey(String sequence, String label) async {
       if (agentMode == AgentMode.code) Future.microtask(_continueAgentLoopIfNeeded);
     }
   }
+
+  String _firstString(Map<String, dynamic> args, List<String> keys, String example) {
+    for (final key in keys) {
+      final value = args[key];
+      if (value is String && value.trim().isNotEmpty) return value;
+    }
+    throw StateError('Missing required parameter `${keys.first}`. Accepted aliases: ${keys.join(', ')}. Example: $example');
+  }
+
+  ToolCallRecord _normalizeToolCall(ToolCallRecord call) {
+    final tool = call.tool.trim();
+    final normalized = _toolAliases[tool.toLowerCase().replaceAll(RegExp(r'[\\s-]+'), '_')] ?? tool;
+    return normalized == call.tool ? call : ToolCallRecord(id: call.id, tool: normalized, arguments: call.arguments, status: call.status, output: call.output);
+  }
+
+  static const Map<String, String> _toolAliases = {
+    'terminal': 'ssh_exec', 'terminal_exec': 'ssh_exec', 'run_command': 'ssh_exec', 'ssh_command': 'ssh_exec', 'shell': 'ssh_exec', 'bash': 'ssh_exec',
+    'ls': 'list_files', 'dir': 'list_files', 'list_dir': 'list_files',
+    'cat': 'read_file', 'read': 'read_file',
+    'write': 'write_file', 'save_file': 'write_file', 'create_file': 'write_file',
+    'replace': 'replace_file_text', 'replace_text': 'replace_file_text', 'edit_file': 'replace_file_text',
+    'mv': 'move_file', 'rename': 'move_file',
+    'rm': 'delete_file', 'remove_file': 'delete_file',
+    'create_dir': 'mkdir', 'make_directory': 'mkdir',
+    'github_me': 'github_verify_token', 'github_user': 'github_verify_token',
+    'github_repos': 'github_list_repos', 'github_repo': 'github_get_repo',
+    'github_write_file': 'github_create_or_update_file', 'github_put_file': 'github_create_or_update_file',
+    'github_run_workflow': 'github_dispatch_workflow', 'github_actions_dispatch': 'github_dispatch_workflow',
+    'github_actions_runs': 'github_list_runs', 'github_workflow_runs': 'github_list_runs',
+  };
 
   String _requiredString(ToolCallRecord call, String key, String example) {
     final value = call.arguments[key];
@@ -807,6 +869,7 @@ ${_toolUsageExample(call.tool)}''';
       final plan = _parseTodo(rawContent);
       if (plan != null) todoPlan = plan;
       final tools = _parseTools(rawContent);
+      if (tools.isEmpty) tools.addAll(_parseFuzzyTools(rawContent));
     final changes = _parseChanges(rawContent);
     if (changes.isNotEmpty) liveCodeChange = changes.first;
     final clean = rawContent
@@ -833,12 +896,39 @@ ${_toolUsageExample(call.tool)}''';
     final reg = RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false);
     return reg.allMatches(raw).map((m) {
       try {
-        final data = jsonDecode(m.group(1)!.trim()) as Map<String, dynamic>;
-        return ToolCallRecord(id: const Uuid().v4(), tool: data['tool']?.toString() ?? '', arguments: Map<String, dynamic>.from(data['arguments'] as Map? ?? {}));
+final parsed = _parseToolPayload(m.group(1)!.trim());
+          return _normalizeToolCall(ToolCallRecord(id: const Uuid().v4(), tool: parsed.$1, arguments: parsed.$2));
       } catch (e) {
         return ToolCallRecord(id: const Uuid().v4(), tool: 'parse_error', arguments: {'raw': m.group(1)}, status: 'error', output: _toolErrorMessage(ToolCallRecord(id: 'parse_error', tool: 'parse_error', arguments: {'raw': m.group(1)}), e));
       }
     }).toList();
+  }
+
+  List<ToolCallRecord> _parseFuzzyTools(String raw) {
+    final result = <ToolCallRecord>[];
+    for (final m in RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).allMatches(raw)) {
+      try {
+        final parsed = _parseToolPayload(m.group(1)!.trim());
+        result.add(_normalizeToolCall(ToolCallRecord(id: const Uuid().v4(), tool: parsed.$1, arguments: parsed.$2)));
+      } catch (_) {}
+    }
+    final inline = RegExp(r'\{\s*"(?:tool|name|function)"\s*:\s*"[^"]+"[\s\S]*?\}', caseSensitive: false);
+    for (final m in inline.allMatches(raw)) {
+      try {
+        final parsed = _parseToolPayload(m.group(0)!.trim());
+        result.add(_normalizeToolCall(ToolCallRecord(id: const Uuid().v4(), tool: parsed.$1, arguments: parsed.$2)));
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  (String, Map<String, dynamic>) _parseToolPayload(String text) {
+    final data = jsonDecode(text) as Map<String, dynamic>;
+    final tool = (data['tool'] ?? data['name'] ?? data['function'] ?? data['action'])?.toString() ?? '';
+    final argsRaw = data['arguments'] ?? data['args'] ?? data['params'] ?? data['input'] ?? <String, dynamic>{};
+    final args = argsRaw is Map ? Map<String, dynamic>.from(argsRaw) : <String, dynamic>{'command': argsRaw.toString()};
+    if (tool.isEmpty) throw StateError('tool name missing');
+    return (tool, args);
   }
 
   AgentTodoPlan? _parseTodo(String raw) {

@@ -259,6 +259,11 @@ class AgentSystemPrompt {
 - MTC：只沟通需求、架构、UI/UX、风险、任务拆解。禁止发起工具调用。
 - Code：可以生成工具调用、文件变更、GitHub 操作和终端执行计划，并应持续推进任务。
 
+## 终端执行优先规则
+- 需要操作服务器时，优先使用 `ssh_exec` 直接执行命令；不要先写 Python 脚本再上传执行，除非任务明确需要复杂脚本。
+- `ssh_exec` 是真实 SSH 远程命令执行工具，参数为：`{"command":"pwd && ls -la"}`。
+- 如果要创建/读取/修改/删除文件，优先使用文件工具：write_file/read_file/replace_file_text/move_file/delete_file/mkdir。
+
 ## 可用工具调用格式
 你可以通过以下格式发起工具调用，应用会根据用户授权策略执行：
 <tool>{"tool":"工具名","arguments":{...}}</tool>
@@ -276,7 +281,7 @@ class AgentSystemPrompt {
 - move_file：移动/重命名文件：`{"from":"/old","to":"/new"}`
 - delete_file：删除文件或目录：`{"path":"/path","directory":false}`
 - mkdir：创建目录：`{"path":"/path/dir"}`
-- ssh_exec：执行终端命令：`{"command":"ls -la"}`
+- ssh_exec：真实执行服务器终端命令：`{"command":"ls -la && pwd"}`。这是服务器命令首选工具。
 - terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
 
 ${hasGitHub ? '''### GitHub 工具（已配置 Token）

@@ -753,7 +753,10 @@ class _ThinkingBlockState extends State<_ThinkingBlock> with SingleTickerProvide
         margin: const EdgeInsets.only(left: 6, top: 4),
         padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
         decoration: const BoxDecoration(border: Border(left: BorderSide(color: MoonColors.edge, width: 1.2))),
-        child: Text(widget.thinking, style: const TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.4)),
+        child: SizedBox(
+          width: MediaQuery.sizeOf(context).width * .66,
+          child: Text(widget.thinking, softWrap: true, textAlign: TextAlign.start, style: const TextStyle(fontSize: 12.5, color: MoonColors.muted, height: 1.55, letterSpacing: .1)),
+        ),
       ),
     ]),
   );
