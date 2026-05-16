@@ -19,6 +19,7 @@ class AppState extends ChangeNotifier {
   final messages = <AgentMessage>[];
   final conversations = <ConversationMeta>[];
   final terminalLogs = <String>['LunaLink SSH Terminal ready.'];
+  BrowserSnapshot? browserSnapshot;
   GitHubConfig github = const GitHubConfig();
   String? activeServerId;
   bool autoReconnect = false;
@@ -344,10 +345,8 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     notifyListeners();
   }
 
-  void clearLiveCodeChange() {
-    liveCodeChange = null;
-    notifyListeners();
-  }
+  void clearBrowserSnapshot() { browserSnapshot = null; notifyListeners(); }
+  void clearLiveCodeChange() { liveCodeChange = null; notifyListeners(); }
 
   Future<void> sendAgentTask(String content) async {
     if (generationActive || busy) return;
@@ -636,6 +635,16 @@ Future<void> sendTerminalKey(String sequence, String label) async {
           output = 'directory created';
           await refreshFiles();
           break;
+        case 'browser_open':
+        case 'web_open':
+        case 'web_search':
+        case 'browser_search':
+          output = await _browserFetch(call);
+          break;
+        case 'github_api':
+        case 'github_request':
+          output = await _githubGenericRequest(call);
+          break;
         case 'github_status':
           output = github.isConnected ? 'GitHub token configured. Use github_verify_token to validate current user.' : 'GitHub token not configured.';
           break;
@@ -726,6 +735,9 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     'mv': 'move_file', 'rename': 'move_file',
     'rm': 'delete_file', 'remove_file': 'delete_file',
     'create_dir': 'mkdir', 'make_directory': 'mkdir',
+    'browser': 'browser_open', 'web': 'browser_open', 'open_url': 'browser_open', 'browser_open': 'browser_open', 'web_open': 'browser_open',
+    'search': 'web_search', 'web_search': 'web_search', 'browser_search': 'web_search',
+    'github_api': 'github_api', 'github_request': 'github_api',
     'github_me': 'github_verify_token', 'github_user': 'github_verify_token',
     'github_repos': 'github_list_repos', 'github_repo': 'github_get_repo',
     'github_write_file': 'github_create_or_update_file', 'github_put_file': 'github_create_or_update_file',
@@ -757,8 +769,41 @@ ${_toolUsageExample(call.tool)}
 正确调用示例：
 ${_toolUsageExample(call.tool)}''';
 
+  Future<String> _browserFetch(ToolCallRecord call) async {
+    final query = call.arguments['query']?.toString().trim() ?? '';
+    final rawUrl = call.arguments['url']?.toString().trim();
+    final url = rawUrl != null && rawUrl.isNotEmpty
+        ? rawUrl
+        : 'https://www.bing.com/search?q=${Uri.encodeQueryComponent(query.isEmpty ? _requiredString(call, 'query', 'Flutter') : query)}';
+    final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+    final res = await http.get(uri, headers: {'User-Agent': 'Mozilla/5.0 LunaLink-Agent Browser'}).timeout(const Duration(seconds: 25));
+    if (res.statusCode < 200 || res.statusCode >= 400) throw StateError('Browser HTTP ${res.statusCode}: ${res.body.take(600)}');
+    final html = res.body;
+    final title = RegExp(r'<title[^>]*>([\s\S]*?)<\/title>', caseSensitive: false).firstMatch(html)?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim() ?? uri.toString();
+    final text = html
+        .replaceAll(RegExp(r'<script[\s\S]*?<\/script>', caseSensitive: false), ' ')
+        .replaceAll(RegExp(r'<style[\s\S]*?<\/style>', caseSensitive: false), ' ')
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    browserSnapshot = BrowserSnapshot(url: uri.toString(), title: title, html: html, text: text, updatedAt: DateTime.now());
+    notifyListeners();
+    return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${text.take(4000)}';
+  }
+
+  Future<String> _githubGenericRequest(ToolCallRecord call) async {
+    final method = (call.arguments['method']?.toString() ?? 'GET').toUpperCase();
+    final path = _requiredString(call, 'path', '/user');
+    final body = call.arguments['body'] is Map ? Map<String, dynamic>.from(call.arguments['body'] as Map) : null;
+    if (!path.startsWith('/')) throw StateError('GitHub API path must start with /, for example /user or /repos/{owner}/{repo}/issues');
+    return _githubRequest(method, path, body: body);
+  }
+
   String _toolUsageExample(String tool) {
     final args = switch (tool) {
+      'browser_open' => {'url': 'https://example.com'},
+      'web_search' => {'query': 'Flutter WebView'},
+      'github_api' => {'method': 'GET', 'path': '/user', 'body': <String, dynamic>{}},
       'ssh_exec' => {'command': 'ls -la'},
       'terminal_wait' => {'delayMs': 3000},
       'list_files' => {'path': '/home/user'},
@@ -827,7 +872,9 @@ ${_toolUsageExample(call.tool)}''';
     final res = switch (method) {
       'GET' => await http.get(uri, headers: headers),
       'POST' => await http.post(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
+      'PATCH' => await http.patch(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
       'PUT' => await http.put(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
+      'DELETE' => await http.delete(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
       _ => throw StateError('Unsupported GitHub method: $method'),
     };
     if (res.statusCode < 200 || res.statusCode >= 300) throw StateError('GitHub ${res.statusCode}: ${res.body}');

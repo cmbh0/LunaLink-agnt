@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../models/ai_models.dart';
 import '../services/app_state.dart';
 import '../theme/moon_theme.dart';
@@ -68,6 +69,7 @@ class _AgentChatScreenState extends State<AgentChatScreen> {
         _Composer(controller: input, onSend: _send),
       ]),
       const _LiveCodeOverlay(),
+      const _BrowserOverlay(),
     ]);
   }
 
@@ -1093,6 +1095,78 @@ String _serverName(AppState state) {
     if (s.id == state.activeServerId) return s.name;
   }
   return 'Cloud';
+}
+
+class _BrowserOverlay extends StatefulWidget {
+  const _BrowserOverlay();
+  @override
+  State<_BrowserOverlay> createState() => _BrowserOverlayState();
+}
+
+class _BrowserOverlayState extends State<_BrowserOverlay> {
+  Offset pos = const Offset(28, 126);
+  Size size = const Size(330, 430);
+  bool minimized = false;
+  WebViewController? controller;
+  String? loadedUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final snap = context.watch<AppState>().browserSnapshot;
+    if (snap == null) return const SizedBox.shrink();
+    if (loadedUrl != snap.url) {
+      loadedUrl = snap.url;
+      controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..loadRequest(Uri.parse(snap.url));
+    }
+    final screen = MediaQuery.sizeOf(context);
+    if (minimized) {
+      return Positioned(
+        left: pos.dx.clamp(0, screen.width - 56),
+        top: pos.dy.clamp(0, screen.height - 56),
+        child: GestureDetector(
+          onPanUpdate: (d) => setState(() => pos += d.delta),
+          onTap: () => setState(() => minimized = false),
+          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF38BDF8)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Icon(Icons.search_rounded, color: Colors.white, size: 25))),
+        ),
+      );
+    }
+    final w = size.width.clamp(280, screen.width - 20).toDouble();
+    final h = size.height.clamp(300, screen.height - 90).toDouble();
+    return Positioned(
+      left: pos.dx.clamp(8, screen.width - w - 8),
+      top: pos.dy.clamp(8, screen.height - h - 8),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(color: Colors.white.withOpacity(.98), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFD6D8E0)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 20, offset: const Offset(0, 8))]),
+          child: Column(children: [
+            GestureDetector(
+              onPanUpdate: (d) => setState(() => pos += d.delta),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+                decoration: const BoxDecoration(color: Color(0xFFF2F3F7), borderRadius: BorderRadius.vertical(top: Radius.circular(10)), border: Border(bottom: BorderSide(color: Color(0xFFD6D8E0)))),
+                child: Row(children: [
+                  const Icon(Icons.search_rounded, size: 16, color: Color(0xFF2563EB)),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(snap.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: MoonColors.text))),
+                  IconButton(onPressed: () => controller?.goBack(), icon: const Icon(Icons.arrow_back_rounded, size: 17), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 26, height: 26)),
+                  IconButton(onPressed: () => controller?.reload(), icon: const Icon(Icons.refresh_rounded, size: 17), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 26, height: 26)),
+                  IconButton(onPressed: () => setState(() => minimized = true), icon: const Icon(Icons.remove_rounded, size: 17), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 26, height: 26)),
+                  IconButton(onPressed: () => context.read<AppState>().clearBrowserSnapshot(), icon: const Icon(Icons.close_rounded, size: 17), padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 26, height: 26)),
+                ]),
+              ),
+            ),
+            Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), color: const Color(0xFFFBFAFF), child: Text(snap.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: MoonColors.muted))),
+            Expanded(child: ClipRRect(borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)), child: WebViewWidget(controller: controller!))),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 class _LiveCodeOverlay extends StatefulWidget {

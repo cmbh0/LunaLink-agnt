@@ -284,7 +284,14 @@ class AgentSystemPrompt {
 - ssh_exec：真实执行服务器终端命令：`{"command":"ls -la && pwd"}`。这是服务器命令首选工具。
 - terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
 
-${hasGitHub ? '''### GitHub 工具（已配置 Token）
+- browser_open：内置浏览器打开网页并返回 HTML/文本摘要：`{"url":"https://example.com"}`
+- web_search：联网搜索并在内置浏览器窗口展示结果页：`{"query":"Flutter WebView"}`
+
+### GitHub 工具（通用真实 API）
+- github_api：调用任意 GitHub REST API，覆盖 Issues/PR/Actions/Branches/Releases/Packages/Orgs/Teams/Gists/Search/Commits/Deployments 等 GitHub API 支持的能力：`{"method":"GET","path":"/user","body":{}}`
+- method 支持 GET/POST/PATCH/PUT/DELETE；path 必须是 `https://api.github.com` 后面的路径，例如 `/repos/owner/repo/issues`。
+
+${hasGitHub ? '''### GitHub 快捷工具（已配置 Token）
 - github_status：查看 GitHub 连接状态：`{}`
 - github_verify_token：验证 Token 当前用户：`{}`
 - github_list_repos：查看仓库：`{"visibility":"all","per_page":30}`

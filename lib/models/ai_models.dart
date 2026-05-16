@@ -189,6 +189,15 @@ class AgentMessage {
       );
 }
 
+class BrowserSnapshot {
+  final String url;
+  final String title;
+  final String html;
+  final String text;
+  final DateTime updatedAt;
+  const BrowserSnapshot({required this.url, required this.title, required this.html, required this.text, required this.updatedAt});
+}
+
 class ToolCallRecord {
   final String id;
   final String tool;
