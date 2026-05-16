@@ -553,32 +553,55 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(.96), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 8, offset: const Offset(0, 2))]),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(.97), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 2))]),
       child: Row(children: [
-        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 21), padding: EdgeInsets.zero, tooltip: '对话历史')),
-        const SizedBox(width: 6),
-        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Text('<>', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, fontFamily: 'monospace')), padding: EdgeInsets.zero, tooltip: '工作区绑定')),
-        const SizedBox(width: 6),
-        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 20), padding: EdgeInsets.zero, tooltip: '文件管理')),
-        const Spacer(),
-        Container(
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _TopIconButton(onTap: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 21), tooltip: '对话历史'),
+          const SizedBox(width: 12),
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkspaceScreen())), icon: const Text('<>', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, fontFamily: 'monospace')), tooltip: '工作区绑定'),
+          const SizedBox(width: 12),
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FileManagerScreen(compact: false))), icon: const Icon(Icons.folder_outlined, size: 20), tooltip: '文件管理'),
+        ]),
+        Expanded(child: Center(child: Container(
           padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(color: const Color(0xFFF0EEF6), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             _ModeChip(selected: state.agentMode == AgentMode.mtc, label: 'MTC', onTap: () => context.read<AppState>().setAgentMode(AgentMode.mtc)),
             _ModeChip(selected: state.agentMode == AgentMode.code, label: 'Code', onTap: () => context.read<AppState>().setAgentMode(AgentMode.code)),
           ]),
-        ),
-        const Spacer(),
-        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen())), icon: const Icon(Icons.terminal_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '终端')),
-        const SizedBox(width: 6),
-        SizedBox(width: 40, height: 40, child: IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 20), padding: EdgeInsets.zero, tooltip: '赞助')),
-        const SizedBox(width: 6),
-        SizedBox(width: 40, height: 40, child: IconButton(onPressed: onSettings, icon: const Icon(Icons.tune_rounded, size: 20), padding: EdgeInsets.zero, tooltip: '设置')),
+        ))),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen())), icon: const Icon(Icons.terminal_rounded, size: 20), tooltip: '终端'),
+          const SizedBox(width: 12),
+          _TopIconButton(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SponsorPage())), icon: const Icon(Icons.volunteer_activism_outlined, size: 20), tooltip: '赞助'),
+          const SizedBox(width: 12),
+          _TopIconButton(onTap: onSettings, icon: const Icon(Icons.tune_rounded, size: 20), tooltip: '设置'),
+        ]),
       ]),
     );
   }
+}
+
+class _TopIconButton extends StatelessWidget {
+  final Widget icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _TopIconButton({required this.icon, required this.tooltip, required this.onTap});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 38,
+        height: 38,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Tooltip(message: tooltip, child: Center(child: icon)),
+          ),
+        ),
+      );
 }
 
 class _EnvironmentDock extends StatelessWidget {
@@ -586,7 +609,7 @@ class _EnvironmentDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final top = MediaQuery.paddingOf(context).top + 48;
+    final top = MediaQuery.paddingOf(context).top + 58;
     return Positioned(
       top: top,
       right: 14,
@@ -605,20 +628,53 @@ class _EnvSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<DevelopmentEnvironment>(
       tooltip: '开发环境',
+      color: Colors.white,
+      elevation: 10,
+      shadowColor: Colors.black.withOpacity(.10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: MoonColors.edge)),
+      position: PopupMenuPosition.under,
       initialValue: state.developmentEnvironment,
       onSelected: (v) => context.read<AppState>().setDevelopmentEnvironment(v),
-      itemBuilder: (_) => DevelopmentEnvironment.values.map((e) => PopupMenuItem(value: e, child: Text(e.description))).toList(),
+      itemBuilder: (_) => DevelopmentEnvironment.values.map((e) => PopupMenuItem(
+        value: e,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: _EnvMenuItem(env: e, selected: e == state.developmentEnvironment),
+      )).toList(),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(20), border: Border.all(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.055), blurRadius: 12, offset: const Offset(0, 4))]),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 10, offset: const Offset(0, 3))]),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 14, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF2563EB) : const Color(0xFF16A34A)),
-          const SizedBox(width: 6),
-          Text('环境：${state.developmentEnvironment.label}', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF1D4ED8) : const Color(0xFF15803D))),
+          Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 12.5, color: MoonColors.muted),
+          const SizedBox(width: 5),
+          Text(state.developmentEnvironment.label, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: MoonColors.text)),
+          const SizedBox(width: 2),
+          const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: MoonColors.muted),
         ]),
       ),
     );
   }
+}
+
+class _EnvMenuItem extends StatelessWidget {
+  final DevelopmentEnvironment env;
+  final bool selected;
+  const _EnvMenuItem({required this.env, required this.selected});
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minWidth: 210),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: selected ? const Color(0xFFF7F4FF) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: selected ? const Color(0xFFE2D8FF) : Colors.transparent)),
+        child: Row(children: [
+          Icon(env == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 18, color: selected ? MoonColors.accent : MoonColors.muted),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(env.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: selected ? MoonColors.accent : MoonColors.text)),
+            const SizedBox(height: 2),
+            Text(env == DevelopmentEnvironment.cloud ? '优先使用服务器工具' : '优先使用本地工作区', style: const TextStyle(fontSize: 11, color: MoonColors.muted)),
+          ])),
+          if (selected) const Icon(Icons.check_circle_rounded, size: 17, color: MoonColors.accent),
+        ]),
+      );
 }
 
 class _ModeChip extends StatelessWidget {
