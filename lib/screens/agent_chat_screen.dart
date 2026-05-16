@@ -629,7 +629,9 @@ class _EnvSwitch extends StatelessWidget {
   const _EnvSwitch({required this.state});
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<DevelopmentEnvironment>(
+    return Theme(
+      data: Theme.of(context).copyWith(splashColor: Colors.transparent, highlightColor: Colors.transparent, hoverColor: Colors.transparent),
+      child: PopupMenuButton<DevelopmentEnvironment>(
       tooltip: '开发环境',
       color: Colors.white,
       elevation: 10,
@@ -653,6 +655,7 @@ class _EnvSwitch extends StatelessWidget {
           const SizedBox(width: 2),
           const Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: MoonColors.muted),
         ]),
+      ),
       ),
     );
   }

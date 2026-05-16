@@ -276,10 +276,51 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> createLocalWorkspaceEntry(String name, {bool directory = false}) async {
+  Future<List<RemoteFileEntry>> listLocalWorkspaceDir([String relativePath = '']) async {
+    final ws = activeWorkspace;
+    if (ws == null) return const [];
+    final root = _safeWorkspacePath(ws.path, relativePath);
+    final dir = Directory(root);
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final out = <RemoteFileEntry>[];
+    await for (final e in dir.list()) {
+      final name = p.basename(e.path);
+      if (name == '.backup' || name.endsWith('.bak')) continue;
+      final stat = await e.stat();
+      out.add(RemoteFileEntry(name: name, path: e.path, isDirectory: stat.type == FileSystemEntityType.directory, size: stat.size, modified: stat.modified));
+    }
+    out.sort((a, b) => a.isDirectory == b.isDirectory ? a.name.compareTo(b.name) : (a.isDirectory ? -1 : 1));
+    return out;
+  }
+
+  Future<void> renameLocalEntry(RemoteFileEntry entry, String newName) async {
+    final target = p.join(p.dirname(entry.path), newName);
+    await FileSystemEntity.rename(entry.path, target);
+    notifyListeners();
+  }
+
+  Future<void> deleteLocalEntry(RemoteFileEntry entry) async {
+    final type = await FileSystemEntity.type(entry.path);
+    if (type == FileSystemEntityType.directory) {
+      await Directory(entry.path).delete(recursive: true);
+    } else {
+      await File(entry.path).delete();
+    }
+    notifyListeners();
+  }
+
+  Future<void> duplicateLocalEntry(RemoteFileEntry entry, String newName) async {
+    if (entry.isDirectory) throw StateError('暂不支持直接复制目录。');
+    await File(entry.path).copy(p.join(p.dirname(entry.path), newName));
+    notifyListeners();
+  }
+
+  Future<File> downloadLocalFile(RemoteFileEntry entry, Directory dir) async => File(entry.path).copy(p.join(dir.path, entry.name));
+
+  Future<void> createLocalWorkspaceEntry(String name, {bool directory = false, String relativeDir = ''}) async {
     final ws = activeWorkspace;
     if (ws == null) throw StateError('No local workspace bound. 简单来说就是当前对话还没有绑定本地工作区。');
-    final target = File(p.join(ws.path, name));
+    final target = File(_safeWorkspacePath(ws.path, p.join(relativeDir, name)));
     if (directory) {
       await Directory(target.path).create(recursive: true);
     } else {
@@ -311,6 +352,7 @@ class AppState extends ChangeNotifier {
 
   String _safeWorkspacePath(String root, String relativePath) {
     final clean = relativePath.replaceAll('\\', '/');
+    if (clean.isEmpty || clean == '.') return root;
     if (clean.contains('..') || clean.startsWith('/') || clean.split('/').contains('.backup')) throw StateError('Unsafe local workspace path. Do not access parent or .backup.');
     return p.join(root, clean);
   }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,69 +8,117 @@ import '../services/app_state.dart';
 import '../theme/moon_theme.dart';
 import 'file_viewer_screen.dart';
 
-class FileManagerScreen extends StatelessWidget {
+class FileManagerScreen extends StatefulWidget {
   final bool compact;
   const FileManagerScreen({super.key, this.compact = false});
 
   @override
+  State<FileManagerScreen> createState() => _FileManagerScreenState();
+}
+
+class _FileManagerScreenState extends State<FileManagerScreen> {
+  String localPath = '';
+  Future<List<RemoteFileEntry>>? localFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = context.watch<AppState>();
+    if (state.developmentEnvironment == DevelopmentEnvironment.local) localFuture ??= state.listLocalWorkspaceDir(localPath);
+  }
+
+  void _reloadLocal() => setState(() => localFuture = context.read<AppState>().listLocalWorkspaceDir(localPath));
+
+  @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final isLocal = state.developmentEnvironment == DevelopmentEnvironment.local;
+    final path = isLocal ? (localPath.isEmpty ? '/' : '/$localPath') : state.currentPath;
     return Scaffold(
-      appBar: AppBar(title: const Text('文件管理')),
+      appBar: AppBar(title: Text(isLocal ? '本地文件管理' : '文件管理')),
       body: SafeArea(child: Column(children: [
-        _SourceBadge(),
-        _FileToolbar(path: state.currentPath),
-      if (state.busy) const LinearProgressIndicator(minHeight: 2),
-      Expanded(
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 16, offset: const Offset(0, 6))]),
-          child: state.files.isEmpty
-              ? const Center(child: Text('目录为空或尚未连接服务器'))
-              : ListView.builder(itemCount: state.files.length, itemBuilder: (context, i) => _TreeTile(entry: state.files[i], depth: 0)),
+        _SourceBadge(isLocal: isLocal),
+        _FileToolbar(path: path, isLocal: isLocal, onLocalUp: localPath.isEmpty ? null : () { setState(() { localPath = _parentLocal(localPath); localFuture = state.listLocalWorkspaceDir(localPath); }); }, onLocalRefresh: _reloadLocal),
+        if (state.busy) const LinearProgressIndicator(minHeight: 2),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 16, offset: const Offset(0, 6))]),
+            child: isLocal
+                ? _LocalList(future: localFuture ?? state.listLocalWorkspaceDir(localPath), reload: _reloadLocal, openDir: (entry) { setState(() { localPath = _relativeLocal(state, entry.path); localFuture = state.listLocalWorkspaceDir(localPath); }); })
+                : state.files.isEmpty
+                    ? const Center(child: Text('目录为空或尚未连接服务器'))
+                    : ListView.builder(itemCount: state.files.length, itemBuilder: (context, i) => _TreeTile(entry: state.files[i], depth: 0, isLocal: false, reload: () => state.refreshFiles())),
+          ),
         ),
-      ),
       ])),
     );
   }
 }
 
+class _LocalList extends StatelessWidget {
+  final Future<List<RemoteFileEntry>> future;
+  final VoidCallback reload;
+  final ValueChanged<RemoteFileEntry> openDir;
+  const _LocalList({required this.future, required this.reload, required this.openDir});
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<RemoteFileEntry>>(
+        future: future,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+          final files = snap.data ?? const [];
+          if (files.isEmpty) return const Center(child: Text('本地工作区为空'));
+          return ListView.builder(itemCount: files.length, itemBuilder: (context, i) => _TreeTile(entry: files[i], depth: 0, isLocal: true, reload: reload, openLocalDir: openDir));
+        },
+      );
+}
+
 class _SourceBadge extends StatelessWidget {
+  final bool isLocal;
+  const _SourceBadge({required this.isLocal});
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final active = state.activeServerId == null ? null : state.servers.where((e) => e.id == state.activeServerId).toList();
-    final label = active == null || active.isEmpty ? 'Cloud：未连接' : 'Cloud：${active.first.mode == ServerAccessMode.ftp ? 'FTP' : active.first.mode == ServerAccessMode.sftp ? 'SFTP' : 'Linux SSH'} · ${active.first.name}';
+    final label = isLocal
+        ? 'Local：${state.activeWorkspace == null ? '未绑定本地工作区' : '${state.activeWorkspace!.name} · ${state.activeWorkspace!.path}'}'
+        : (active == null || active.isEmpty ? 'Cloud：未连接' : 'Cloud：${active.first.mode == ServerAccessMode.ftp ? 'FTP' : active.first.mode == ServerAccessMode.sftp ? 'SFTP' : 'Linux SSH'} · ${active.first.name}');
+    final color = isLocal ? const Color(0xFF16A34A) : const Color(0xFF2563EB);
+    final bg = isLocal ? const Color(0xFFF0FDF4) : const Color(0xFFEFF6FF);
+    final edge = isLocal ? const Color(0xFFBBF7D0) : const Color(0xFFBFDBFE);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(10, 8, 10, 0),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFBFDBFE))),
-      child: Row(children: [const Icon(Icons.cloud_outlined, size: 16, color: Color(0xFF2563EB)), const SizedBox(width: 8), Expanded(child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF1D4ED8))))]),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14), border: Border.all(color: edge)),
+      child: Row(children: [Icon(isLocal ? Icons.laptop_mac_rounded : Icons.cloud_outlined, size: 16, color: color), const SizedBox(width: 8), Expanded(child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color)))]),
     );
   }
 }
 
 class _FileToolbar extends StatelessWidget {
   final String path;
-  const _FileToolbar({required this.path});
+  final bool isLocal;
+  final VoidCallback? onLocalUp;
+  final VoidCallback? onLocalRefresh;
+  const _FileToolbar({required this.path, required this.isLocal, this.onLocalUp, this.onLocalRefresh});
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
     child: Row(children: [
-      IconButton(onPressed: path == '/' ? null : () => context.read<AppState>().openDir(_parent(path)), icon: const Icon(Icons.arrow_upward_rounded)),
+      IconButton(onPressed: isLocal ? onLocalUp : (path == '/' ? null : () => context.read<AppState>().openDir(_parent(path))), icon: const Icon(Icons.arrow_upward_rounded)),
       Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14)), child: Text(path, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)))),
-      IconButton(onPressed: () => context.read<AppState>().refreshFiles(), icon: const Icon(Icons.refresh_rounded)),
+      IconButton(onPressed: isLocal ? onLocalRefresh : () => context.read<AppState>().refreshFiles(), icon: const Icon(Icons.refresh_rounded)),
       PopupMenuButton<String>(
         color: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: MoonColors.edge)),
         onSelected: (v) => _handleTopAction(context, v),
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'new_file', child: Text('新建文件')),
-          PopupMenuItem(value: 'new_dir', child: Text('新建文件夹')),
-          PopupMenuItem(value: 'upload', child: Text('上传本地文件')),
-          PopupMenuItem(value: 'terminal', child: Text('在此处打开终端')),
-          PopupMenuItem(value: 'ftp', child: Text('自动创建 FTP(vsftpd)')),
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'new_file', child: Text('新建文件')),
+          const PopupMenuItem(value: 'new_dir', child: Text('新建文件夹')),
+          if (!isLocal) const PopupMenuItem(value: 'upload', child: Text('上传本地文件')),
+          if (!isLocal) const PopupMenuItem(value: 'terminal', child: Text('在此处打开终端')),
+          if (!isLocal) const PopupMenuItem(value: 'ftp', child: Text('自动创建 FTP(vsftpd)')),
         ],
       ),
     ]),
@@ -79,16 +128,26 @@ class _FileToolbar extends StatelessWidget {
     final state = context.read<AppState>();
     if (action == 'terminal') { await state.runTerminalCommand('cd ${state.currentPath} && pwd && ls -la'); return; }
     if (action == 'ftp') { final out = await state.ssh.installVsftpd(); if (context.mounted) showDialog(context: context, builder: (_) => AlertDialog(title: const Text('FTP 创建结果'), content: SingleChildScrollView(child: Text(out)))); return; }
-    if (action == 'upload') { final picked = await FilePicker.platform.pickFiles(); final path = picked?.files.single.path; if (path != null) await state.uploadLocalFile(path); return; }
+    if (action == 'upload') { final picked = await FilePicker.platform.pickFiles(); final local = picked?.files.single.path; if (local != null) await state.uploadLocalFile(local); return; }
     final name = await _askName(context, action == 'new_dir' ? '新建文件夹' : '新建文件');
-    if (name != null && name.trim().isNotEmpty) await state.createRemoteFile(name.trim(), directory: action == 'new_dir');
+    if (name != null && name.trim().isNotEmpty) {
+      if (isLocal) {
+        await state.createLocalWorkspaceEntry(name.trim(), directory: action == 'new_dir', relativeDir: path == '/' ? '' : path.substring(1));
+        onLocalRefresh?.call();
+      } else {
+        await state.createRemoteFile(name.trim(), directory: action == 'new_dir');
+      }
+    }
   }
 }
 
 class _TreeTile extends StatelessWidget {
   final RemoteFileEntry entry;
   final int depth;
-  const _TreeTile({required this.entry, required this.depth});
+  final bool isLocal;
+  final VoidCallback reload;
+  final ValueChanged<RemoteFileEntry>? openLocalDir;
+  const _TreeTile({required this.entry, required this.depth, required this.isLocal, required this.reload, this.openLocalDir});
   @override
   Widget build(BuildContext context) {
     final isBak = entry.name.endsWith('.bak') || entry.name.contains('.bak.');
@@ -97,12 +156,12 @@ class _TreeTile extends StatelessWidget {
       child: InkWell(
         onTap: () async {
           final state = context.read<AppState>();
-          if (entry.isDirectory) {
-            await state.openDir(entry.path);
-          } else {
-            final changed = await Navigator.push(context, MaterialPageRoute(builder: (_) => FileViewerScreen(state: state, path: entry.path)));
-            if (changed == true && context.mounted) await state.refreshFiles();
-          }
+if (entry.isDirectory) {
+             if (isLocal) { openLocalDir?.call(entry); } else { await state.openDir(entry.path); }
+           } else {
+             final changed = await Navigator.push(context, MaterialPageRoute(builder: (_) => FileViewerScreen(state: state, path: entry.path, local: isLocal)));
+             if (changed == true && context.mounted) reload();
+           }
         },
         child: Container(
           padding: EdgeInsets.only(left: 12 + depth * 18, right: 4, top: 7, bottom: 7),
@@ -122,10 +181,10 @@ class _TreeTile extends StatelessWidget {
               onSelected: (v) => _handleEntryAction(context, v),
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'rename', child: Text('重命名')),
-                const PopupMenuItem(value: 'duplicate', child: Text('复制')),
-                const PopupMenuItem(value: 'chmod', child: Text('权限 chmod')),
-                if (entry.isDirectory) const PopupMenuItem(value: 'download', child: Text('下载到默认下载目录')),
-                if (isBak) const PopupMenuItem(value: 'restore', child: Text('从备份还原')),
+                if (!entry.isDirectory) const PopupMenuItem(value: 'duplicate', child: Text('复制')),
+                if (!isLocal) const PopupMenuItem(value: 'chmod', child: Text('权限 chmod')),
+                if (!entry.isDirectory) PopupMenuItem(value: 'download', child: Text(isLocal ? '复制到下载目录' : '下载到默认下载目录')),
+                if (!isLocal && isBak) const PopupMenuItem(value: 'restore', child: Text('从备份还原')),
                 const PopupMenuItem(value: 'delete', child: Text('删除')),
               ],
             ),
@@ -141,16 +200,16 @@ class _TreeTile extends StatelessWidget {
       final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('确认还原备份'), content: Text('将 ${entry.path} 还原到原文件'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('还原'))]));
       if (ok == true) await state.restoreBackup(entry.path);
     } else if (action == 'rename') {
-      final name = await _askName(context, '重命名', initial: entry.name); if (name != null && name.trim().isNotEmpty) await state.renameRemote(entry, name.trim());
+      final name = await _askName(context, '重命名', initial: entry.name); if (name != null && name.trim().isNotEmpty) { isLocal ? await state.renameLocalEntry(entry, name.trim()) : await state.renameRemote(entry, name.trim()); reload(); }
     } else if (action == 'duplicate') {
-      final name = await _askName(context, '复制为', initial: '${entry.name}.copy'); if (name != null && name.trim().isNotEmpty) await state.duplicateRemote(entry, name.trim());
+      final name = await _askName(context, '复制为', initial: '${entry.name}.copy'); if (name != null && name.trim().isNotEmpty) { isLocal ? await state.duplicateLocalEntry(entry, name.trim()) : await state.duplicateRemote(entry, name.trim()); reload(); }
     } else if (action == 'chmod') {
       final mode = await _askName(context, '权限 chmod', initial: '755'); if (mode != null && mode.trim().isNotEmpty) await state.chmodRemote(entry, mode.trim());
     } else if (action == 'download') {
-      final dir = Directory('/storage/emulated/0/download'); if (!await dir.exists()) await dir.create(recursive: true); final file = await state.downloadRemoteFile(entry, dir); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已下载到 ${file.path}')));
+      final dir = Directory('/storage/emulated/0/download'); if (!await dir.exists()) await dir.create(recursive: true); final file = isLocal ? await state.downloadLocalFile(entry, dir) : await state.downloadRemoteFile(entry, dir); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已保存到 ${file.path}')));
     } else if (action == 'delete') {
       final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('确认删除'), content: Text(entry.path), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除'))]));
-      if (ok == true) await state.deleteRemote(entry);
+      if (ok == true) { isLocal ? await state.deleteLocalEntry(entry) : await state.deleteRemote(entry); reload(); }
     }
   }
 }
@@ -168,6 +227,12 @@ IconData _iconFor(String name) {
 }
 
 String _parent(String path) { final parts = path.split('/')..removeLast(); final joined = parts.join('/'); return joined.isEmpty ? '/' : joined; }
+String _parentLocal(String path) { final parts = path.split('/')..removeLast(); return parts.join('/'); }
+String _relativeLocal(AppState state, String absolute) {
+  final root = state.activeWorkspace?.path ?? '';
+  if (root.isEmpty || !absolute.startsWith(root)) return '';
+  return absolute.substring(root.length).replaceFirst(RegExp(r'^/+'), '');
+}
 
 Future<String?> _askName(BuildContext context, String title, {String initial = ''}) {
   final controller = TextEditingController(text: initial);

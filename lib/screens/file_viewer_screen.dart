@@ -11,7 +11,8 @@ import '../theme/moon_theme.dart';
 class FileViewerScreen extends StatefulWidget {
   final AppState state;
   final String path;
-  const FileViewerScreen({super.key, required this.state, required this.path});
+  final bool local;
+  const FileViewerScreen({super.key, required this.state, required this.path, this.local = false});
 
   @override
   State<FileViewerScreen> createState() => _FileViewerScreenState();
@@ -41,7 +42,7 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   }
 
   Future<void> _load() async {
-    final bytes = await widget.state.ssh.readFile(widget.path);
+    final bytes = widget.local ? await File(widget.path).readAsBytes() : await widget.state.ssh.readFile(widget.path);
     final name = widget.path.toLowerCase();
     if (_isImage(name)) {
       setState(() => text = '__IMAGE__${base64Encode(bytes)}');
@@ -71,7 +72,11 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   }
 
   Future<void> _save() async {
-    await widget.state.writeRemoteTextWithBackup(widget.path, controller.text);
+    if (widget.local) {
+      await File(widget.path).writeAsString(controller.text);
+    } else {
+      await widget.state.writeRemoteTextWithBackup(widget.path, controller.text);
+    }
     if (mounted) Navigator.pop(context, true);
   }
 
