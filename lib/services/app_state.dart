@@ -111,7 +111,7 @@ class AppState extends ChangeNotifier {
     final index = conversations.indexWhere((e) => e.id == id);
     if (index < 0) return;
     conversations.removeAt(index);
-    await store.deleteFile('memory', id);
+    await store.deleteFile('memory', id, deleteBackups: true);
     if (conversationId == id) {
       if (conversations.isEmpty) {
         await newConversation();

@@ -37,9 +37,23 @@ class JsonTxtStore {
     await f.writeAsString(encoder.convert(data));
   }
 
-  Future<void> deleteFile(String scope, String name) async {
+  Future<void> deleteFile(String scope, String name, {bool deleteBackups = false}) async {
     final f = await file(scope, name);
     if (await f.exists()) await f.delete();
+    if (deleteBackups) await deleteBackupsFor(scope, name);
+  }
+
+  Future<void> deleteBackupsFor(String scope, String name) async {
+    final backups = await _dir('$scope/backups');
+    if (!await backups.exists()) return;
+    await for (final entity in backups.list()) {
+      if (entity is File) {
+        final base = p.basename(entity.path);
+        if (base == '$name.txt' || base.startsWith('$name.') && base.endsWith('.txt')) {
+          await entity.delete();
+        }
+      }
+    }
   }
 
   Future<List<FileSystemEntity>> listBackups(String scope) async {
