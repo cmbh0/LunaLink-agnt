@@ -1,5 +1,9 @@
 # LunaLink Agent
 
+## 友链
+
+- [LINUX DO](https://linux.do)
+
 LunaLink Agent 是一款面向 Android 的 Flutter 移动端 Code Agent 应用。它将服务器连接、远程/本地文件管理、GitHub API、内置浏览器、上下文记忆和 AI 自动化编程工作流整合到手机端，让用户可以直接在 Android 设备上完成从需求规划、工具调用、代码修改到云端构建验证的完整开发闭环。
 
 ## 核心定位
