@@ -56,7 +56,7 @@ class SshService {
 
   Future<String> execStream(String command, {void Function(String chunk)? onChunk}) async {
     final client = _requireClient();
-    final session = await client.execute(command, pty: SSHPtyConfig(term: 'xterm-256color', width: 120, height: 32));
+    final session = await client.execute(command, pty: const SSHPtyConfig(type: 'xterm-256color', width: 120, height: 32));
     final buffer = StringBuffer();
     final done = Completer<void>();
     void add(List<int> data) {
