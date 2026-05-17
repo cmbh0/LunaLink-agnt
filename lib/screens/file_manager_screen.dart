@@ -112,11 +112,11 @@ class _FileToolbar extends StatelessWidget {
       _MoonPopupButton(
         icon: Icons.more_horiz,
         items: [
-          const MoonSelectOption(value: 'new_file', label: '新建文件', icon: null),
-          const MoonSelectOption(value: 'new_dir', label: '新建文件夹', icon: null),
-          if (!isLocal) const MoonSelectOption(value: 'upload', label: '上传本地文件', icon: null),
-          if (!isLocal) const MoonSelectOption(value: 'terminal', label: '在此处打开终端', icon: null),
-          if (!isLocal) const MoonSelectOption(value: 'ftp', label: '自动创建 FTP(vsftpd)', icon: null),
+          const MoonSelectOption(value: 'new_file', label: '新建文件', icon: Icons.note_add),
+          const MoonSelectOption(value: 'new_dir', label: '新建文件夹', icon: Icons.create_new_folder),
+          if (!isLocal) const MoonSelectOption(value: 'upload', label: '上传本地文件', icon: Icons.file_upload),
+          if (!isLocal) const MoonSelectOption(value: 'terminal', label: '在此处打开终端', icon: Icons.code),
+          if (!isLocal) const MoonSelectOption(value: 'ftp', label: '自动创建 FTP(vsftpd)', icon: Icons.cloud),
         ],
         onSelected: (v) => _handleTopAction(context, v),
       ),
@@ -177,11 +177,11 @@ if (entry.isDirectory) {
             _MoonPopupButton(
               icon: Icons.more_vert,
               items: [
-                const MoonSelectOption(value: 'rename', label: '重命名', icon: null),
-                if (!entry.isDirectory) const MoonSelectOption(value: 'duplicate', label: '复制', icon: null),
-                if (!isLocal) const MoonSelectOption(value: 'chmod', label: '权限 chmod', icon: null),
-                if (!entry.isDirectory) MoonSelectOption(value: 'download', label: isLocal ? '复制到下载目录' : '下载到默认下载目录', icon: null),
-                if (!isLocal && isBak) const MoonSelectOption(value: 'restore', label: '从备份还原', icon: null),
+                const MoonSelectOption(value: 'rename', label: '重命名', icon: Icons.edit),
+                if (!entry.isDirectory) const MoonSelectOption(value: 'duplicate', label: '复制', icon: Icons.content_copy),
+                if (!isLocal) const MoonSelectOption(value: 'chmod', label: '权限 chmod', icon: Icons.lock),
+                if (!entry.isDirectory) MoonSelectOption(value: 'download', label: isLocal ? '复制到下载目录' : '下载到默认下载目录', icon: Icons.file_download),
+                if (!isLocal && isBak) const MoonSelectOption(value: 'restore', label: '从备份还原', icon: Icons.restore),
                 const MoonSelectOption(value: 'delete', label: '删除', icon: Icons.delete_outline),
               ],
               onSelected: (v) => _handleEntryAction(context, v),
@@ -234,7 +234,7 @@ class _MoonPopupButton extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                     decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.edge)),
-                    child: Row(children: [_ActionGlyph(label: item.label, danger: item.value == 'delete'), const SizedBox(width: 10), Expanded(child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.text)))]),
+                    child: Row(children: [Icon(item.icon ?? Icons.circle, size: 18, color: item.value == 'delete' ? MoonColors.danger : MoonColors.muted), const SizedBox(width: 10), Expanded(child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.text)))]),
                   ),
                 ),
               )).toList())),
@@ -245,28 +245,6 @@ class _MoonPopupButton extends StatelessWidget {
       );
 }
 
-
-class _ActionGlyph extends StatelessWidget {
-  final String label;
-  final bool danger;
-  const _ActionGlyph({required this.label, this.danger = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final text = label.trim().isEmpty ? '?' : label.trim().characters.first;
-    return Container(
-      width: 22,
-      height: 22,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: danger ? const Color(0xFFFFF1F2) : const Color(0xFFF2EEFF),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: danger ? const Color(0xFFFECACA) : const Color(0xFFE2D8FF)),
-      ),
-      child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: danger ? MoonColors.danger : MoonColors.accent)),
-    );
-  }
-}
 
 IconData _iconFor(String name) {
   final n = name.toLowerCase();
