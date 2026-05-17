@@ -225,7 +225,7 @@ class _MoonPopupButton extends StatelessWidget {
             context: context,
                         builder: (_) => Container(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
               child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: items.map((item) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: InkWell(

@@ -350,7 +350,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
             builder: (_) => StatefulBuilder(builder: (context, setSheet) => Container(
         height: MediaQuery.sizeOf(context).height * .72,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             const Expanded(child: Text('选择可用模型', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
@@ -465,7 +465,7 @@ class _TinyDropdown<T> extends StatelessWidget {
         context: context,
                 builder: (_) => Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
           child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: labels.entries.map((e) {
             final active = e.key == value;
             return Padding(
@@ -1165,7 +1165,7 @@ Future<void> _showTodoSheet(BuildContext context, AgentTodoPlan plan) async {
     context: context,
         builder: (_) => Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('任务目标', style: TextStyle(fontSize: 12, color: MoonColors.muted, fontWeight: FontWeight.w700)),
         const SizedBox(height: 5),
@@ -1195,7 +1195,7 @@ Future<void> _showQuickModelSwitch(BuildContext context, AppState state, AiServi
     context: context,
         builder: (_) => Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Padding(padding: EdgeInsets.fromLTRB(4, 4, 4, 10), child: Text('切换模型', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
         for (final m in models) Padding(
