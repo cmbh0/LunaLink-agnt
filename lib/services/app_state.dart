@@ -1316,9 +1316,11 @@ ${_toolUsageExample(call.tool)}''';
   String _sanitizeAgentVisibleContent(String raw) {
     var out = raw
         .replaceAll(RegExp(r'<tool>[\s\S]*?<\/tool>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<tool_call>[\s\S]*?<\/tool_call>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<file_change>[\s\S]*?<\/file_change>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<todo>[\s\S]*?<\/todo>', caseSensitive: false), '')
         .replaceAll(RegExp(r'<tool>[\s\S]*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<tool_call>[\s\S]*$', caseSensitive: false), '')
         .replaceAll(RegExp(r'<file_change>[\s\S]*$', caseSensitive: false), '')
         .replaceAll(RegExp(r'<todo>[\s\S]*$', caseSensitive: false), '');
     out = _removeFuzzyToolBlocks(out);
@@ -1360,6 +1362,9 @@ ${_toolUsageExample(call.tool)}''';
     for (final m in RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false).allMatches(raw)) {
       add(m.group(1) ?? '');
     }
+    for (final m in RegExp(r'<tool_call>([\s\S]*?)<\/tool_call>', caseSensitive: false).allMatches(raw)) {
+      add(m.group(1) ?? '');
+    }
     for (final m in RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).allMatches(raw)) {
       add(m.group(1) ?? '');
     }
@@ -1386,8 +1391,11 @@ ${_toolUsageExample(call.tool)}''';
   }
 
   List<ToolCallRecord> _parseTools(String raw) {
-    final reg = RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false);
-    return reg.allMatches(raw).map((m) {
+    final matches = <RegExpMatch>[
+      ...RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false).allMatches(raw),
+      ...RegExp(r'<tool_call>([\s\S]*?)<\/tool_call>', caseSensitive: false).allMatches(raw),
+    ];
+    return matches.map((m) {
       try {
 final parsed = _parseToolPayload(m.group(1)!.trim());
           return _normalizeToolCall(ToolCallRecord(id: const Uuid().v4(), tool: parsed.$1, arguments: parsed.$2));

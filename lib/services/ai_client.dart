@@ -273,7 +273,7 @@ class AgentSystemPrompt {
 - 本地工作区工具（每个对话可绑定一个工作区，禁止访问 .backup）：local_list_files `{}`，local_read_file `{"path":"README.md"}`，local_write_file `{"path":"src/main.txt","content":"..."}`，local_mkdir `{"path":"src"}`。
 
 ## 可用工具调用格式
-你可以通过以下格式发起工具调用，应用会根据用户授权策略执行：
+你可以通过以下格式发起工具调用，应用会根据用户授权策略执行。只能使用 <tool> 标签，不要使用 <tool_call>、Markdown 代码块或正文 JSON：
 <tool>{"tool":"工具名","arguments":{...}}</tool>
 
 ## 任务规划格式（Code 模式强烈要求）
