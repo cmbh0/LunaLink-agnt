@@ -1294,7 +1294,7 @@ class _LiveCodeOverlayState extends State<_LiveCodeOverlay> {
         child: GestureDetector(
           onPanUpdate: (d) => setState(() => pos += d.delta),
           onTap: () => setState(() => minimized = false),
-          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Icon(Icons.nightlight_round, color: MoonGlass.panel(context), size: 25))),
+          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Icon(Icons.nightlight_round, color: Colors.white, size: 25))),
         ),
       );
     }
