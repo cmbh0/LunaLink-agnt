@@ -88,7 +88,7 @@ class MoonSelectField<T> extends StatelessWidget {
           backgroundColor: Colors.transparent,
           builder: (_) => Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-            decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+            decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
             child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Padding(padding: const EdgeInsets.fromLTRB(4, 2, 4, 10), child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: MoonColors.text))),
               for (final item in options) Padding(
