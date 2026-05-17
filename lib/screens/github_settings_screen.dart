@@ -45,12 +45,11 @@ class _GitHubSettingsScreenState extends State<GitHubSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('GitHub 连接')),
+            appBar: AppBar(title: const Text('GitHub 连接')),
       body: ListView(padding: const EdgeInsets.all(18), children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
           child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('连接 GitHub', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             SizedBox(height: 8),
@@ -58,7 +57,7 @@ class _GitHubSettingsScreenState extends State<GitHubSettingsScreen> {
           ]),
         ),
         const SizedBox(height: 16),
-        TextField(controller: token, obscureText: true, decoration: InputDecoration(labelText: 'GitHub Personal Access Token', hintText: 'ghp_xxxx...', isDense: true, filled: true, fillColor: MoonGlass.panel2(context), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.accent)))),
+        TextField(controller: token, obscureText: true, decoration: InputDecoration(labelText: 'GitHub Personal Access Token', hintText: 'ghp_xxxx...', isDense: true, filled: true, fillColor: MoonColors.panel2, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.accent)))),
         const SizedBox(height: 12),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,

@@ -293,8 +293,8 @@ class AgentSystemPrompt {
 - terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
 - download_remote_file：下载服务器文件到 Android 下载目录：`{"path":"/home/user/file.zip","filename":"file.zip"}`
 
-### 联网研究工具（委托搜索模型）
-- web_search：把当前问题委托给用户配置的“联网搜索模型”进行联网检索/资料整合：`{"query":"要搜索的问题"}`。该工具不再打开内置浏览器窗口，而是调用独立 AI 搜索模型返回结构化资料。
+### 联网研究工具（AI 内置联网模型）
+- web_search：把当前问题委托给用户配置的“联网搜索模型”，由该模型使用自身内置联网/实时检索能力完成资料检索并返回结构化结果：`{"query":"要搜索的问题"}`。应用本身不提供浏览器/WebView/HTTP 搜索工具。
 
 ### GitHub 工具（通用真实 API）
 - github_api：调用任意 GitHub REST API，覆盖 Issues/PR/Actions/Branches/Releases/Packages/Orgs/Teams/Gists/Search/Commits/Deployments 等 GitHub API 支持的能力：`{"method":"GET","path":"/user","body":{}}`

@@ -35,8 +35,7 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
     final isLocal = state.developmentEnvironment == DevelopmentEnvironment.local;
     final path = isLocal ? (localPath.isEmpty ? '/' : '/$localPath') : state.currentPath;
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(title: Text(isLocal ? '本地文件管理' : '文件管理')),
+            appBar: AppBar(title: Text(isLocal ? '本地文件管理' : '文件管理')),
       body: SafeArea(child: Column(children: [
         _SourceBadge(isLocal: isLocal),
         _FileToolbar(path: path, isLocal: isLocal, onLocalUp: localPath.isEmpty ? null : () { setState(() { localPath = _parentLocal(localPath); localFuture = state.listLocalWorkspaceDir(localPath); }); }, onLocalRefresh: _reloadLocal),
@@ -44,7 +43,7 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
         Expanded(
           child: Container(
             margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 16, offset: const Offset(0, 6))]),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 16, offset: const Offset(0, 6))]),
             child: isLocal
                 ? _LocalList(future: localFuture ?? state.listLocalWorkspaceDir(localPath), reload: _reloadLocal, openDir: (entry) { setState(() { localPath = _relativeLocal(state, entry.path); localFuture = state.listLocalWorkspaceDir(localPath); }); })
                 : state.files.isEmpty
@@ -108,7 +107,7 @@ class _FileToolbar extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
     child: Row(children: [
       IconButton(onPressed: isLocal ? onLocalUp : (path == '/' ? null : () => context.read<AppState>().openDir(_parent(path))), icon: const Icon(Icons.arrow_upward_rounded)),
-      Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: MoonGlass.panel2(context), borderRadius: BorderRadius.circular(14)), child: Text(path, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)))),
+      Expanded(child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14)), child: Text(path, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)))),
       IconButton(onPressed: isLocal ? onLocalRefresh : () => context.read<AppState>().refreshFiles(), icon: const Icon(Icons.refresh_rounded)),
       _MoonPopupButton(
         icon: Icons.more_horiz_rounded,
@@ -224,10 +223,9 @@ class _MoonPopupButton extends StatelessWidget {
         onPressed: () async {
           final selected = await showModalBottomSheet<String>(
             context: context,
-            backgroundColor: Colors.transparent,
-            builder: (_) => Container(
+                        builder: (_) => Container(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-              decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
               child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: items.map((item) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: InkWell(
@@ -235,7 +233,7 @@ class _MoonPopupButton extends StatelessWidget {
                   onTap: () => Navigator.pop(context, item.value),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                    decoration: BoxDecoration(color: MoonGlass.panel2(context), borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.edge)),
+                    decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: MoonColors.edge)),
                     child: Row(children: [Icon(item.icon ?? Icons.circle_outlined, size: 18, color: MoonColors.muted), const SizedBox(width: 10), Expanded(child: Text(item.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: MoonColors.text)))]),
                   ),
                 ),

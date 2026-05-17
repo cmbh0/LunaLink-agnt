@@ -13,8 +13,7 @@ class WorkspaceScreen extends StatelessWidget {
     final state = context.watch<AppState>();
     final cloudServers = state.servers;
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('工作区绑定')),
+            appBar: AppBar(title: const Text('工作区绑定')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         Container(
           width: double.infinity,
@@ -38,7 +37,7 @@ class WorkspaceScreen extends StatelessWidget {
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('本地工作区绑定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
@@ -60,7 +59,7 @@ class WorkspaceScreen extends StatelessWidget {
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Cloud 工作目录绑定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),

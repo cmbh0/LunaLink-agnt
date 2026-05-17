@@ -35,7 +35,7 @@ class _ConversationDrawerState extends State<_ConversationDrawer> {
     final state = context.watch<AppState>();
     return Drawer(
       width: MediaQuery.sizeOf(context).width * .72,
-      backgroundColor: MoonGlass.panel(context),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(24))),
       child: SafeArea(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
@@ -74,7 +74,7 @@ class _ConversationDrawerState extends State<_ConversationDrawer> {
                     margin: const EdgeInsets.only(left: 12, right: 4, bottom: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                     decoration: BoxDecoration(
-                      color: MoonGlass.panel(context),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: MoonColors.edge),
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 3))],
@@ -114,7 +114,7 @@ class _HistoryAction extends StatelessWidget {
         Container(
           width: 28,
           height: 28,
-          decoration: BoxDecoration(color: danger ? Colors.red.withOpacity(.08) : MoonGlass.panel2(context), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: danger ? Colors.red.withOpacity(.08) : MoonColors.panel2, borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, size: 16, color: danger ? Colors.red : MoonColors.text),
         ),
         const SizedBox(height: 2),

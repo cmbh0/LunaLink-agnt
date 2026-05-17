@@ -45,7 +45,6 @@ class AppState extends ChangeNotifier {
   static const int _maxAiRetries = 5;
   String? selectedAiConfigId;
   AiRoleBinding aiRoles = const AiRoleBinding();
-  String? uiBackgroundPath;
 
   LocalWorkspace? get activeWorkspace {
     final id = boundWorkspaceId;
@@ -111,8 +110,6 @@ class AppState extends ChangeNotifier {
     final activeAiDoc = await store.readMap('profiles', 'active_ai', fallback: const {});
     selectedAiConfigId = activeAiDoc['id'] as String?;
     aiRoles = AiRoleBinding.fromJson(Map<String, dynamic>.from(activeAiDoc['roles'] as Map? ?? const {}));
-    final uiDoc = await store.readMap('profiles', 'ui', fallback: const {});
-    uiBackgroundPath = uiDoc['backgroundPath'] as String?;
     final aiDoc = await store.readMap('profiles', 'ai_services', fallback: {'items': <dynamic>[]});
     final aiItems = aiDoc['items'] as List? ?? [];
     if (aiItems.isNotEmpty) {
@@ -519,12 +516,7 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
-  Future<void> setUiBackgroundPath(String? path) async {
-    uiBackgroundPath = path;
-    await store.writeMap('profiles', 'ui', {'backgroundPath': path});
-    notifyListeners();
-  }
-Future<void> sendTerminalKey(String sequence, String label) async {
+  Future<void> sendTerminalKey(String sequence, String label) async {
     terminalLogs.add('[key] $label');
     notifyListeners();
   }
@@ -1377,7 +1369,7 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
     if (cfg.endpoint.trim().isEmpty || cfg.model.trim().isEmpty || cfg.apiKey.trim().isEmpty) throw StateError('联网搜索模型配置不完整。请配置 endpoint/model/apiKey。');
     final history = messages.reversed.take(8).toList().reversed.map((m) => '${m.role}: ${m.content}').join('\n');
     return AiClient(cfg).sendChat([
-      {'role': 'system', 'content': '你是 LunaLink 的联网搜索/研究专用模型。请基于自身联网能力检索资料，输出结构化结果：结论、关键依据、来源链接、注意事项。不要调用工具，只返回给主对话 AI 可使用的信息。'},
+      {'role': 'system', 'content': '你是 LunaLink 的联网搜索/研究专用模型。请使用你这个模型自身内置的联网搜索、实时检索或浏览能力查找资料，输出结构化结果：结论、关键依据、来源链接、注意事项。注意：LunaLink 应用不会提供浏览器/WebView/HTTP 搜索工具，你只能依赖模型供应商提供的内置联网能力；不要调用工具，只返回给主对话 AI 可使用的信息。'},
       {'role': 'user', 'content': '用户当前搜索需求：$query\n\n最近对话上下文：\n$history'},
     ]);
   }

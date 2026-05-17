@@ -17,7 +17,6 @@ dependencies:
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2
   file_picker: ^8.1.2
-  image_picker: ^1.1.2
   image: ^4.2.0
   video_player: ^2.9.2
   audioplayers: ^6.1.0

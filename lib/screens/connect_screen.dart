@@ -25,8 +25,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: widget.fullPage ? AppBar(title: const Text('Cloud 服务器')) : null,
+            appBar: widget.fullPage ? AppBar(title: const Text('Cloud 服务器')) : null,
       body: ListView(padding: const EdgeInsets.all(16), children: [
 const Text('连接服务器 / 虚拟主机', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
        const SizedBox(height: 12),
