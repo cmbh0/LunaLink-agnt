@@ -44,6 +44,8 @@ class AppState extends ChangeNotifier {
   static const int _maxAgentLoopRounds = 50;
   static const int _maxAiRetries = 5;
   String? selectedAiConfigId;
+  AiRoleBinding aiRoles = const AiRoleBinding();
+  String? uiBackgroundPath;
 
   LocalWorkspace? get activeWorkspace {
     final id = boundWorkspaceId;
@@ -108,6 +110,9 @@ class AppState extends ChangeNotifier {
     github = GitHubConfig.fromJson(githubDoc);
     final activeAiDoc = await store.readMap('profiles', 'active_ai', fallback: const {});
     selectedAiConfigId = activeAiDoc['id'] as String?;
+    aiRoles = AiRoleBinding.fromJson(Map<String, dynamic>.from(activeAiDoc['roles'] as Map? ?? const {}));
+    final uiDoc = await store.readMap('profiles', 'ui', fallback: const {});
+    uiBackgroundPath = uiDoc['backgroundPath'] as String?;
     final aiDoc = await store.readMap('profiles', 'ai_services', fallback: {'items': <dynamic>[]});
     final aiItems = aiDoc['items'] as List? ?? [];
     if (aiItems.isNotEmpty) {
@@ -504,6 +509,21 @@ class AppState extends ChangeNotifier {
     await out.writeAsBytes(await ssh.readFile(entry.path));
     return out;
   }
+
+  Future<File> downloadRemotePath(String remotePath, {String? filename}) async {
+    final dir = Directory('/storage/emulated/0/download');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final name = filename?.trim().isNotEmpty == true ? filename!.trim() : p.basename(remotePath);
+    final out = File(p.join(dir.path, name.isEmpty ? 'remote_file' : name));
+    await out.writeAsBytes(await ssh.readFile(remotePath));
+    return out;
+  }
+
+  Future<void> setUiBackgroundPath(String? path) async {
+    uiBackgroundPath = path;
+    await store.writeMap('profiles', 'ui', {'backgroundPath': path});
+    notifyListeners();
+  }
 Future<void> sendTerminalKey(String sequence, String label) async {
     terminalLogs.add('[key] $label');
     notifyListeners();
@@ -592,7 +612,7 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     notifyListeners();
 
     if (!isContinuation) addUserMessage(content);
-    final cfg = activeAiConfig;
+    final cfg = configForRole(AiTaskRole.chat);
     final modeGuide = agentMode == AgentMode.mtc
         ? '当前是 MTC 方案沟通模式：只能聊天和整理需求，禁止输出 <tool> 或 <file_change>，禁止要求应用执行任何工具调用。你需要专注需求澄清、架构方案、UI/UX 设计和风险评估。'
         : '当前是 Code 编码模式：必须按照持续 Agent 工作流推进：先规划 todo，再执行工具；工具结果会自动回传给你；todo 未全部 done 前必须继续下一步；全部 done 后输出最终总结并停止。当前授权策略：${permissionMode.name}。';
@@ -827,6 +847,15 @@ Future<void> sendTerminalKey(String sequence, String label) async {
           await Future.delayed(Duration(milliseconds: delay.clamp(0, 30000)));
           output = terminalLogs.take(80).join('\n');
           break;
+        case 'download_file':
+        case 'download_remote_file':
+          final file = await downloadRemotePath(_requiredString(call, 'path', '/path/file'), filename: call.arguments['filename'] as String?);
+          output = 'downloaded to ${file.path}';
+          break;
+        case 'web_search':
+        case 'search':
+          output = await _delegatedWebSearch(_requiredString(call, 'query', '要搜索的问题'));
+          break;
         case 'ls':
         case 'dir':
         case 'list_dir':
@@ -1024,9 +1053,11 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     'replace': 'replace_file_text', 'replace_text': 'replace_file_text', 'edit_file': 'replace_file_text',
     'mv': 'move_file', 'rename': 'move_file',
     'rm': 'delete_file', 'remove_file': 'delete_file',
+      'download': 'download_remote_file', 'download_file': 'download_remote_file', 'download_remote_file': 'download_remote_file',
     'create_dir': 'mkdir', 'make_directory': 'mkdir',
     'local_ls': 'local_list_files', 'workspace_list_files': 'local_list_files', 'local_cat': 'local_read_file', 'workspace_read_file': 'local_read_file',
     'local_write': 'local_write_file', 'workspace_write_file': 'local_write_file', 'local_create_file': 'local_write_file', 'local_create_dir': 'local_mkdir', 'workspace_mkdir': 'local_mkdir',
+    'search': 'web_search', 'web_search': 'web_search',
     'github_api': 'github_api', 'github_request': 'github_api',
     'github_me': 'github_verify_token', 'github_user': 'github_verify_token',
     'github_repos': 'github_list_repos', 'github_repo': 'github_get_repo',
@@ -1084,7 +1115,9 @@ ${_toolUsageExample(call.tool)}''';
       'local_write_file' => {'path': 'README.md', 'content': '...'},
       'local_mkdir' => {'path': 'src'},
       'ssh_exec' => {'command': 'ls -la'},
+      'web_search' => {'query': 'Flutter 最新稳定版信息'},
       'terminal_wait' => {'delayMs': 3000},
+      'download_remote_file' => {'path': '/home/user/file.zip', 'filename': 'file.zip'},
       'list_files' => {'path': '/home/user'},
       'read_file' => {'path': '/home/user/main.dart'},
       'write_file' => {'path': '/home/user/main.dart', 'content': '...'},
@@ -1301,11 +1334,53 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
 
   Future<void> setActiveAiConfig(String id) async {
     selectedAiConfigId = id;
-    await store.writeMap('profiles', 'active_ai', {'id': id});
+    aiRoles = aiRoles.copyWith(chatConfigId: id);
+    await _saveActiveAiProfile();
     notifyListeners();
   }
 
+  AiServiceConfig configForRole(AiTaskRole role) {
+    final id = aiRoles.configIdFor(role) ?? selectedAiConfigId;
+    return aiConfigs.firstWhere((e) => e.id == id, orElse: () => activeAiConfig);
+  }
+
+  Future<void> setAiRoleConfig(AiTaskRole role, String? configId) async {
+    aiRoles = switch (role) {
+      AiTaskRole.chat => aiRoles.copyWith(chatConfigId: configId),
+      AiTaskRole.summary => aiRoles.copyWith(summaryConfigId: configId),
+      AiTaskRole.webSearch => aiRoles.copyWith(webSearchConfigId: configId),
+    };
+    if (role == AiTaskRole.chat && configId != null) selectedAiConfigId = configId;
+    await _saveActiveAiProfile();
+    notifyListeners();
+  }
+
+  Future<void> setAiSummaryEnabled(bool enabled) async {
+    aiRoles = aiRoles.copyWith(enableSummary: enabled);
+    await _saveActiveAiProfile();
+    notifyListeners();
+  }
+
+  Future<void> setAiWebSearchEnabled(bool enabled) async {
+    aiRoles = aiRoles.copyWith(enableWebSearch: enabled);
+    await _saveActiveAiProfile();
+    notifyListeners();
+  }
+
+  Future<void> _saveActiveAiProfile() async => store.writeMap('profiles', 'active_ai', {'id': selectedAiConfigId, 'roles': aiRoles.toJson()});
+
   Future<List<String>> fetchModelsFor(AiServiceConfig config) => AiClient(config).fetchModels();
+
+  Future<String> _delegatedWebSearch(String query) async {
+    if (!aiRoles.enableWebSearch) throw StateError('联网搜索模型未启用。请在 AI 配置中开启联网搜索分工。');
+    final cfg = configForRole(AiTaskRole.webSearch);
+    if (cfg.endpoint.trim().isEmpty || cfg.model.trim().isEmpty || cfg.apiKey.trim().isEmpty) throw StateError('联网搜索模型配置不完整。请配置 endpoint/model/apiKey。');
+    final history = messages.reversed.take(8).toList().reversed.map((m) => '${m.role}: ${m.content}').join('\n');
+    return AiClient(cfg).sendChat([
+      {'role': 'system', 'content': '你是 LunaLink 的联网搜索/研究专用模型。请基于自身联网能力检索资料，输出结构化结果：结论、关键依据、来源链接、注意事项。不要调用工具，只返回给主对话 AI 可使用的信息。'},
+      {'role': 'user', 'content': '用户当前搜索需求：$query\n\n最近对话上下文：\n$history'},
+    ]);
+  }
 
   Future<String> testAiConfig(AiServiceConfig config) async {
     final text = await AiClient(config).sendChat(const [
@@ -1325,7 +1400,8 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
     }
     await store.writeMap('profiles', 'ai_services', {'items': aiConfigs.map((e) => e.toJson()).toList()});
     selectedAiConfigId ??= config.id;
-    await store.writeMap('profiles', 'active_ai', {'id': selectedAiConfigId});
+    aiRoles = aiRoles.copyWith(chatConfigId: aiRoles.chatConfigId ?? selectedAiConfigId, summaryConfigId: aiRoles.summaryConfigId ?? selectedAiConfigId, webSearchConfigId: aiRoles.webSearchConfigId ?? selectedAiConfigId);
+    await _saveActiveAiProfile();
     notifyListeners();
   }
 
@@ -1404,7 +1480,8 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
       'todoPlan': todoPlan?.toJson(),
       'events': messages.map((m) => m.toJson()).toList(),
     });
-    final cfg = activeAiConfig;
+    final cfg = configForRole(AiTaskRole.summary);
+    if (!aiRoles.enableSummary) return;
     final threshold = cfg.summaryThreshold <= 0 ? 999999 : cfg.summaryThreshold;
     final userCount = messages.where((m) => m.role == 'user').length;
     if (userCount > 0 && userCount % threshold == 0 && messages.length > 2) {
@@ -1413,7 +1490,7 @@ final parsed = _parseToolPayload(m.group(1)!.trim());
   }
 
   Future<void> summarizeCurrentMemory({bool auto = false}) async {
-    final cfg = activeAiConfig;
+    final cfg = configForRole(AiTaskRole.summary);
     final content = messages.map((m) => '${m.role == 'user' ? '用户' : 'AI'}: ${m.content}').join('\n');
     var summary = content.length > 1600 ? '${content.substring(0, 1600)}\n...已压缩 ${messages.length} 条上下文。' : content;
     if (cfg.apiKey.isNotEmpty && cfg.endpoint.isNotEmpty && cfg.model.isNotEmpty) {

@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
@@ -10,14 +12,23 @@ class MoonScaffold extends StatelessWidget {
   const MoonScaffold({super.key, required this.child, this.appBar, this.floatingActionButton});
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        drawerScrimColor: Colors.black.withOpacity(.10),
-        drawer: const _ConversationDrawer(),
-        appBar: appBar,
-        floatingActionButton: floatingActionButton,
-        body: SafeArea(child: child),
-      );
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final bg = state.uiBackgroundPath;
+    final hasBg = bg != null && bg.isNotEmpty;
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      drawerScrimColor: Colors.black.withOpacity(.10),
+      drawer: const _ConversationDrawer(),
+      appBar: appBar,
+      floatingActionButton: floatingActionButton,
+      body: Stack(children: [
+        if (hasBg) Positioned.fill(child: Image.file(File(bg), fit: BoxFit.cover)),
+        if (hasBg) Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14), child: Container(color: Colors.white.withOpacity(.18)))),
+        SafeArea(child: child),
+      ]),
+    );
+  }
 }
 
 class _ConversationDrawer extends StatefulWidget {

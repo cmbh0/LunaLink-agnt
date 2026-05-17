@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/ai_models.dart';
@@ -143,6 +144,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
           items: state.aiConfigs.map((e) => DropdownMenuItem(value: e, child: Text('${e.name} · ${e.model}', style: const TextStyle(fontSize: 13)))).toList(),
           onChanged: (v) { if (v != null) state.setActiveAiConfig(v.id); },
         ),
+        const SizedBox(height: 10),
+        _roleSelectors(state),
         const SizedBox(height: 12),
         _field(name, '配置名称'),
         _field(endpoint, 'API Base URL', hint: 'https://api.openai.com/v1'),
@@ -171,6 +174,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
           ),
         ),
         _field(key, 'API Key', obscure: true),
+        SwitchListTile(dense: true, contentPadding: EdgeInsets.zero, value: state.aiRoles.enableSummary, onChanged: (v) => state.setAiSummaryEnabled(v), title: const Text('开启自动总结 / 压缩对话', style: TextStyle(fontSize: 14)), subtitle: const Text('关闭后不会自动总结，也不会压缩当前对话上下文。')),
         Row(children: [Expanded(child: _field(temp, 'Temperature', hint: '留空则不传')), const SizedBox(width: 8), Expanded(child: _field(maxTokens, 'Max Tokens', hint: '留空则不传'))]),
         _label('记忆总结'),
         _field(summaryThreshold, '每多少条用户消息自动总结', hint: '例如 12'),
@@ -178,6 +182,8 @@ class _AiConfigPageState extends State<AiConfigPage> {
         const SizedBox(height: 8),
         SwitchListTile(dense: true, contentPadding: EdgeInsets.zero, value: stream, onChanged: (v) => setState(() => stream = v), title: const Text('流式输出 (SSE)', style: TextStyle(fontSize: 14)), subtitle: const Text('若一直等待无内容，可关闭后重试；错误会直接显示在气泡里。')),
         if (testResult != null) Container(margin: const EdgeInsets.only(top: 4, bottom: 8), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(10), border: Border.all(color: MoonColors.edge)), child: SelectableText(testResult!, style: const TextStyle(fontSize: 12, color: MoonColors.text))),
+        const SizedBox(height: 10),
+        _themeCard(state),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: OutlinedButton(onPressed: testing ? null : _testConfig, child: testing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('测试请求'))),
@@ -191,6 +197,40 @@ class _AiConfigPageState extends State<AiConfigPage> {
       ]),
     );
   }
+
+  Widget _roleSelectors(AppState state) {
+    final options = state.aiConfigs.map((e) => MoonSelectOption<String>(value: e.id, label: '${e.name} · ${e.model}', icon: Icons.smart_toy_outlined)).toList();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('AI 分工', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: MoonColors.text)),
+        const SizedBox(height: 8),
+        MoonSelectField<String>(value: state.configForRole(AiTaskRole.chat).id, label: AiTaskRole.chat.label, options: options, onChanged: (v) { if (v != null) state.setAiRoleConfig(AiTaskRole.chat, v); }, dense: true),
+        const SizedBox(height: 8),
+        MoonSelectField<String>(value: state.configForRole(AiTaskRole.summary).id, label: AiTaskRole.summary.label, options: options, onChanged: (v) { if (v != null) state.setAiRoleConfig(AiTaskRole.summary, v); }, dense: true),
+        const SizedBox(height: 8),
+        MoonSelectField<String>(value: state.configForRole(AiTaskRole.webSearch).id, label: AiTaskRole.webSearch.label, options: options, onChanged: (v) { if (v != null) state.setAiRoleConfig(AiTaskRole.webSearch, v); }, dense: true),
+        SwitchListTile(dense: true, contentPadding: EdgeInsets.zero, value: state.aiRoles.enableWebSearch, onChanged: (v) => state.setAiWebSearchEnabled(v), title: const Text('启用联网搜索委托模型', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)), subtitle: const Text('AI 调用 web_search 时，会把需求交给该模型搜索整理后返回。')),
+      ]),
+    );
+  }
+
+  Widget _themeCard(AppState state) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('主题与背景', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: MoonColors.text)),
+      const SizedBox(height: 6),
+      Text(state.uiBackgroundPath == null ? '当前：默认白色主题' : '当前：背景图 + iOS 毛玻璃风格', style: const TextStyle(fontSize: 12, color: MoonColors.muted)),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(onPressed: () async { final img = await ImagePicker().pickImage(source: ImageSource.gallery); if (img != null && mounted) await context.read<AppState>().setUiBackgroundPath(img.path); }, icon: const Icon(Icons.image_outlined), label: const Text('选择背景图'))),
+        const SizedBox(width: 8),
+        Expanded(child: OutlinedButton.icon(onPressed: state.uiBackgroundPath == null ? null : () => context.read<AppState>().setUiBackgroundPath(null), icon: const Icon(Icons.format_color_reset_rounded), label: const Text('恢复默认'))),
+      ]),
+    ]),
+  );
 
   Future<void> _save() async {
     final state = context.read<AppState>();

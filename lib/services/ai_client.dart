@@ -291,7 +291,10 @@ class AgentSystemPrompt {
 - mkdir：创建目录：`{"path":"/path/dir"}`
 - ssh_exec：真实执行服务器终端命令：`{"command":"ls -la && pwd"}`。这是服务器命令首选工具。
 - terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
+- download_remote_file：下载服务器文件到 Android 下载目录：`{"path":"/home/user/file.zip","filename":"file.zip"}`
 
+### 联网研究工具（委托搜索模型）
+- web_search：把当前问题委托给用户配置的“联网搜索模型”进行联网检索/资料整合：`{"query":"要搜索的问题"}`。该工具不再打开内置浏览器窗口，而是调用独立 AI 搜索模型返回结构化资料。
 
 ### GitHub 工具（通用真实 API）
 - github_api：调用任意 GitHub REST API，覆盖 Issues/PR/Actions/Branches/Releases/Packages/Orgs/Teams/Gists/Search/Commits/Deployments 等 GitHub API 支持的能力：`{"method":"GET","path":"/user","body":{}}`

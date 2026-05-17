@@ -42,7 +42,7 @@ const Text('连接服务器 / 虚拟主机', style: TextStyle(fontSize: 24, font
 MoonSelectField<ServerAccessMode>(
           value: mode,
           label: '连接模式',
-          options: ServerAccessMode.values.map((e) => MoonSelectOption(value: e, label: e.label, icon: e == ServerAccessMode.ftp ? Icons.folder_shared_outlined : e == ServerAccessMode.sftp ? Icons.folder_copy_outlined : Icons.terminal_rounded)).toList(),
+          options: ServerAccessMode.values.map((e) => MoonSelectOption(value: e, label: e.label, icon: Icons.terminal_rounded)).toList(),
           onChanged: (v) => setState(() { mode = v ?? ServerAccessMode.linux; port.text = mode == ServerAccessMode.ftp ? '21' : '22'; }),
         ),
       TextField(controller: host, decoration: const InputDecoration(labelText: 'Host / IP')),

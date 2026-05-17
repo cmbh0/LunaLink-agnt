@@ -60,6 +60,49 @@ extension AiApiModeLabel on AiApiMode {
 }
 enum ToolPermissionMode { askEveryTime, autoAll }
 
+enum AiTaskRole { chat, summary, webSearch }
+
+extension AiTaskRoleLabel on AiTaskRole {
+  String get label => switch (this) {
+        AiTaskRole.chat => '日常对话 / 执行任务模型',
+        AiTaskRole.summary => '总结 / 压缩对话模型',
+        AiTaskRole.webSearch => '联网搜索模型',
+      };
+}
+
+class AiRoleBinding {
+  final String? chatConfigId;
+  final String? summaryConfigId;
+  final String? webSearchConfigId;
+  final bool enableSummary;
+  final bool enableWebSearch;
+  const AiRoleBinding({this.chatConfigId, this.summaryConfigId, this.webSearchConfigId, this.enableSummary = true, this.enableWebSearch = false});
+
+  String? configIdFor(AiTaskRole role) => switch (role) {
+        AiTaskRole.chat => chatConfigId,
+        AiTaskRole.summary => summaryConfigId,
+        AiTaskRole.webSearch => webSearchConfigId,
+      };
+
+  AiRoleBinding copyWith({String? chatConfigId, String? summaryConfigId, String? webSearchConfigId, bool? enableSummary, bool? enableWebSearch}) => AiRoleBinding(
+        chatConfigId: chatConfigId ?? this.chatConfigId,
+        summaryConfigId: summaryConfigId ?? this.summaryConfigId,
+        webSearchConfigId: webSearchConfigId ?? this.webSearchConfigId,
+        enableSummary: enableSummary ?? this.enableSummary,
+        enableWebSearch: enableWebSearch ?? this.enableWebSearch,
+      );
+
+  Map<String, dynamic> toJson() => {'chatConfigId': chatConfigId, 'summaryConfigId': summaryConfigId, 'webSearchConfigId': webSearchConfigId, 'enableSummary': enableSummary, 'enableWebSearch': enableWebSearch};
+
+  factory AiRoleBinding.fromJson(Map<String, dynamic> json) => AiRoleBinding(
+        chatConfigId: json['chatConfigId'] as String?,
+        summaryConfigId: json['summaryConfigId'] as String?,
+        webSearchConfigId: json['webSearchConfigId'] as String?,
+        enableSummary: json['enableSummary'] as bool? ?? true,
+        enableWebSearch: json['enableWebSearch'] as bool? ?? false,
+      );
+}
+
 
 const Map<AiProviderType, String> providerEndpoints = {
   AiProviderType.openai: 'https://api.openai.com/v1',

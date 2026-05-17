@@ -13,7 +13,7 @@ class LunaLinkApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState()..loadPersistedState(),
-      child: MaterialApp(
+      child: Consumer<AppState>(builder: (context, state, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'LunaLink Agent',
         theme: MoonTheme.light,
@@ -28,7 +28,7 @@ class LunaLinkApp extends StatelessWidget {
           ),
         ),
         home: const HomeShell(),
-      ),
+      )),
     );
   }
 }
