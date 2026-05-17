@@ -1051,7 +1051,7 @@ class _ToolCardState extends State<_ToolCard> {
   @override
   Widget build(BuildContext context) {
     final call = widget.call;
-    final done = {'done', 'rejected', 'error', 'running'}.contains(call.status);
+    final done = {'done', 'rejected', 'error', 'running'}.contains(call.status) && !call.preview;
     final color = call.status == 'error' ? MoonColors.danger : call.status == 'done' ? MoonColors.ok : call.status == 'running' ? MoonColors.warn : MoonColors.accent;
     final mode = context.watch<AppState>().permissionMode;
     final hasOutput = call.output?.trim().isNotEmpty == true;
@@ -1068,7 +1068,7 @@ class _ToolCardState extends State<_ToolCard> {
             const SizedBox(width: 4),
             Icon(Icons.build_circle_outlined, size: 15, color: color),
             const SizedBox(width: 5),
-            Expanded(child: Text('工具调用 · ${call.tool}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
+            Expanded(child: Text('${call.preview ? '预渲染工具' : '工具调用'} · ${call.tool}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color))),
             Text(call.status, style: TextStyle(fontSize: 10, color: color)),
           ]),
         ),
@@ -1093,7 +1093,7 @@ class _ToolCardState extends State<_ToolCard> {
             ]),
           ),
         ],
-        if (!done) Padding(padding: const EdgeInsets.only(top: 8), child: Row(children: [
+        if (!done && !call.preview) Padding(padding: const EdgeInsets.only(top: 8), child: Row(children: [
           OutlinedButton(onPressed: () => context.read<AppState>().rejectTool(call.id), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30), textStyle: const TextStyle(fontSize: 12)), child: const Text('拒绝')),
           const SizedBox(width: 8),
           FilledButton(onPressed: () => context.read<AppState>().executeTool(call.id), style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12), minimumSize: const Size(0, 30), textStyle: const TextStyle(fontSize: 12)), child: const Text('允许')),

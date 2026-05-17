@@ -272,9 +272,10 @@ class ToolCallRecord {
   final Map<String, dynamic> arguments;
   final String status;
   final String? output;
-  const ToolCallRecord({required this.id, required this.tool, required this.arguments, this.status = 'pending', this.output});
+  final bool preview;
+  const ToolCallRecord({required this.id, required this.tool, required this.arguments, this.status = 'pending', this.output, this.preview = false});
 
-  Map<String, dynamic> toJson() => {'id': id, 'tool': tool, 'arguments': arguments, 'status': status, 'output': output};
+  Map<String, dynamic> toJson() => {'id': id, 'tool': tool, 'arguments': arguments, 'status': status, 'output': output, 'preview': preview};
 
   factory ToolCallRecord.fromJson(Map<String, dynamic> json) => ToolCallRecord(
         id: json['id'] as String? ?? '',
@@ -282,6 +283,7 @@ class ToolCallRecord {
         arguments: Map<String, dynamic>.from(json['arguments'] as Map? ?? {}),
         status: json['status'] as String? ?? 'pending',
         output: json['output'] as String?,
+        preview: json['preview'] as bool? ?? false,
       );
 }
 

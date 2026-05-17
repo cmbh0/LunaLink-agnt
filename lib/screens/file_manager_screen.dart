@@ -247,13 +247,12 @@ class _MoonPopupButton extends StatelessWidget {
 
 IconData _iconFor(String name) {
   final n = name.toLowerCase();
-  if (n.endsWith('.dart')) return Icons.flutter_dash_rounded;
-  if (n.endsWith('.js') || n.endsWith('.ts')) return Icons.javascript_rounded;
-  if (n.endsWith('.json') || n.endsWith('.yaml') || n.endsWith('.yml')) return Icons.data_object_rounded;
-  if (n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.webp') || n.endsWith('.gif')) return Icons.image_rounded;
+  if (n.endsWith('.dart') || n.endsWith('.js') || n.endsWith('.ts') || n.endsWith('.java') || n.endsWith('.kt') || n.endsWith('.py') || n.endsWith('.go') || n.endsWith('.rs') || n.endsWith('.c') || n.endsWith('.cpp') || n.endsWith('.h')) return Icons.code_rounded;
+    if (n.endsWith('.json') || n.endsWith('.yaml') || n.endsWith('.yml') || n.endsWith('.xml') || n.endsWith('.toml')) return Icons.article_outlined;
+  if (n.endsWith('.png') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.webp') || n.endsWith('.gif')) return Icons.image_outlined;
   if (n.endsWith('.mp3') || n.endsWith('.wav') || n.endsWith('.flac')) return Icons.music_note_rounded;
-  if (n.endsWith('.mp4') || n.endsWith('.mkv') || n.endsWith('.mov')) return Icons.movie_rounded;
-  if (n.endsWith('.zip') || n.endsWith('.tar') || n.endsWith('.gz')) return Icons.archive_rounded;
+  if (n.endsWith('.mp4') || n.endsWith('.mkv') || n.endsWith('.mov')) return Icons.movie_outlined;
+  if (n.endsWith('.zip') || n.endsWith('.tar') || n.endsWith('.gz') || n.endsWith('.rar') || n.endsWith('.7z')) return Icons.archive_outlined;
   return Icons.description_outlined;
 }
 

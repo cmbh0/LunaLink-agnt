@@ -42,6 +42,8 @@ class AppState extends ChangeNotifier {
   int _agentLoopRound = 0;
   int _aiRetryCount = 0;
   bool _agentLoopRunning = false;
+  final Map<String, String> _previewToolIds = <String, String>{};
+  final Map<String, String> _previewChangeIds = <String, String>{};
   static const int _maxAgentLoopRounds = 50;
   static const int _maxAiRetries = 5;
   String? selectedAiConfigId;
@@ -683,8 +685,7 @@ void _appendTerminalChunk(String chunk) {
         await for (final chunk in AiClient(cfg).streamChat(req)) {
           gotAnyChunk = true;
           raw += chunk;
-          final parsed = _extractThinkingStreaming(raw);
-          updateAssistantMessage(id, parsed.$2, thinking: parsed.$1, modelLabel: modelLabel, persist: false);
+          _previewAgentOutput(id, raw, modelLabel);
           if (cancelRequested) break;
         }
         if (cancelRequested) {
@@ -851,7 +852,8 @@ void _appendTerminalChunk(String chunk) {
     final found = _findTool(toolCallId);
     if (found == null) return;
     final call = _normalizeToolCall(found.$2);
-    _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'running', output: call.output));
+    if (call.preview) return;
+    _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'running', output: call.output, preview: call.preview));
     String output;
     try {
       switch (call.tool) {
@@ -1050,11 +1052,11 @@ void _appendTerminalChunk(String chunk) {
         default:
           throw StateError('Unknown tool: ${call.tool}');
       }
-      _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'done', output: output));
+      _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'done', output: output, preview: false));
       await journal.append(conversationId: conversationId, event: {'type': 'tool', 'tool': call.tool, 'args': call.arguments, 'output': output});
     } catch (e) {
       final err = _toolErrorMessage(call, e);
-      _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'error', output: err));
+      _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'error', output: err, preview: false));
     } finally {
       notifyListeners();
       await _rewriteMemoryFromMessages();
@@ -1082,7 +1084,7 @@ void _appendTerminalChunk(String chunk) {
   ToolCallRecord _normalizeToolCall(ToolCallRecord call) {
     final tool = call.tool.trim();
     final normalized = _toolAliases[tool.toLowerCase().replaceAll(RegExp(r'[\\s-]+'), '_')] ?? tool;
-    return normalized == call.tool ? call : ToolCallRecord(id: call.id, tool: normalized, arguments: call.arguments, status: call.status, output: call.output);
+    return normalized == call.tool ? call : ToolCallRecord(id: call.id, tool: normalized, arguments: call.arguments, status: call.status, output: call.output, preview: call.preview);
   }
 
   static const Map<String, String> _toolAliases = {
@@ -1182,7 +1184,7 @@ ${_toolUsageExample(call.tool)}''';
     final found = _findTool(toolCallId);
     if (found == null) return;
     final c = found.$2;
-    _replaceTool(toolCallId, ToolCallRecord(id: c.id, tool: c.tool, arguments: c.arguments, status: 'rejected', output: '用户已拒绝'));
+    _replaceTool(toolCallId, ToolCallRecord(id: c.id, tool: c.tool, arguments: c.arguments, status: 'rejected', output: '用户已拒绝', preview: false));
     await _rewriteMemoryFromMessages();
     if (agentMode == AgentMode.code) Future.microtask(_continueAgentLoopIfNeeded);
   }
@@ -1261,6 +1263,8 @@ ${_toolUsageExample(call.tool)}''';
   }
 
   Future<void> _materializeAgentOutput(String messageId, String rawContent, String? thinking, String? modelLabel) async {
+    _previewToolIds.removeWhere((key, value) => key.startsWith('$messageId:'));
+    _previewChangeIds.removeWhere((key, value) => key.startsWith('$messageId:'));
     if (agentMode == AgentMode.mtc) {
         final parsed = _extractThinking(rawContent);
         updateAssistantMessage(messageId, parsed.$2.isEmpty ? rawContent : parsed.$2, thinking: thinking ?? parsed.$1, modelLabel: modelLabel);
@@ -1272,11 +1276,7 @@ ${_toolUsageExample(call.tool)}''';
       if (tools.isEmpty) tools.addAll(_parseFuzzyTools(rawContent));
     final changes = _parseChanges(rawContent);
     if (changes.isNotEmpty) liveCodeChange = changes.first;
-    final clean = rawContent
-        .replaceAll(RegExp(r'<tool>[\s\S]*?<\/tool>', caseSensitive: false), '')
-        .replaceAll(RegExp(r'<file_change>[\s\S]*?<\/file_change>', caseSensitive: false), '')
-        .replaceAll(RegExp(r'<todo>[\s\S]*?<\/todo>', caseSensitive: false), '')
-        .trim();
+    final clean = _sanitizeAgentVisibleContent(rawContent).trim();
     updateAssistantMessage(messageId, clean.isEmpty && (tools.isNotEmpty || changes.isNotEmpty || plan != null) ? '已生成待处理操作。' : clean, thinking: thinking, modelLabel: modelLabel);
     final idx = messages.indexWhere((m) => m.id == messageId);
     if (idx >= 0) {
@@ -1292,6 +1292,99 @@ ${_toolUsageExample(call.tool)}''';
     }
     await _rewriteMemoryFromMessages();
   }
+  void _previewAgentOutput(String messageId, String raw, String? modelLabel) {
+    final extracted = _extractThinkingStreaming(raw);
+    final visible = _sanitizeAgentVisibleContent(extracted.$2);
+    final tools = _parsePreviewTools(raw, messageId);
+    final changes = _parsePreviewChanges(raw, messageId);
+    final idx = messages.indexWhere((m) => m.id == messageId);
+    if (idx < 0) return;
+    final msg = messages[idx];
+    messages[idx] = AgentMessage(
+      id: msg.id,
+      role: msg.role,
+      content: visible.trim(),
+      createdAt: msg.createdAt,
+      thinking: extracted.$1 ?? msg.thinking,
+      modelLabel: modelLabel ?? msg.modelLabel,
+      toolCalls: tools.isEmpty ? msg.toolCalls : tools,
+      changes: changes.isEmpty ? msg.changes : changes,
+    );
+    notifyListeners();
+  }
+
+  String _sanitizeAgentVisibleContent(String raw) {
+    var out = raw
+        .replaceAll(RegExp(r'<tool>[\s\S]*?<\/tool>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<file_change>[\s\S]*?<\/file_change>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<todo>[\s\S]*?<\/todo>', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<tool>[\s\S]*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<file_change>[\s\S]*$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'<todo>[\s\S]*$', caseSensitive: false), '');
+    out = _removeFuzzyToolBlocks(out);
+    return out;
+  }
+
+  String _removeFuzzyToolBlocks(String raw) {
+    var out = raw;
+    out = out.replaceAllMapped(RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false), (m) {
+      try {
+        _parseToolPayload(m.group(1)!.trim());
+        return '';
+      } catch (_) {
+        return m.group(0)!;
+      }
+    });
+    out = out.replaceAllMapped(RegExp(r'\{\s*"(?:tool|name|function|action)"\s*:\s*"[^"]+"[\s\S]*?\}', caseSensitive: false), (m) {
+      try {
+        _parseToolPayload(m.group(0)!.trim());
+        return '';
+      } catch (_) {
+        return m.group(0)!;
+      }
+    });
+    return out;
+  }
+
+  List<ToolCallRecord> _parsePreviewTools(String raw, String messageId) {
+    final records = <ToolCallRecord>[];
+    void add(String payload) {
+      try {
+        final parsed = _parseToolPayload(payload.trim());
+        final key = '$messageId:${parsed.$1}:${jsonEncode(parsed.$2)}';
+        final id = _previewToolIds.putIfAbsent(key, () => const Uuid().v4());
+        records.add(_normalizeToolCall(ToolCallRecord(id: id, tool: parsed.$1, arguments: parsed.$2, preview: true)));
+      } catch (_) {}
+    }
+
+    for (final m in RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false).allMatches(raw)) {
+      add(m.group(1) ?? '');
+    }
+    for (final m in RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false).allMatches(raw)) {
+      add(m.group(1) ?? '');
+    }
+    for (final m in RegExp(r'\{\s*"(?:tool|name|function|action)"\s*:\s*"[^"]+"[\s\S]*?\}', caseSensitive: false).allMatches(raw)) {
+      add(m.group(0) ?? '');
+    }
+    return records;
+  }
+
+  List<FileChangeRecord> _parsePreviewChanges(String raw, String messageId) {
+    final records = <FileChangeRecord>[];
+    for (final m in RegExp(r'<file_change>([\s\S]*?)<\/file_change>', caseSensitive: false).allMatches(raw)) {
+      try {
+        final data = jsonDecode(m.group(1)!.trim()) as Map<String, dynamic>;
+        final path = data['path']?.toString() ?? currentPath;
+        final newText = data['newText']?.toString() ?? '';
+        final oldText = data['oldText']?.toString() ?? '';
+        final key = '$messageId:$path:${newText.length}:${oldText.length}';
+        final id = _previewChangeIds.putIfAbsent(key, () => const Uuid().v4());
+        records.add(FileChangeRecord(id: id, path: path, oldText: oldText, newText: newText));
+      } catch (_) {}
+    }
+    return records;
+  }
+
   List<ToolCallRecord> _parseTools(String raw) {
     final reg = RegExp(r'<tool>([\s\S]*?)<\/tool>', caseSensitive: false);
     return reg.allMatches(raw).map((m) {
