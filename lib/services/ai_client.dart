@@ -261,9 +261,9 @@ class AgentSystemPrompt {
 
 ## 开发环境优先级
 - 当前开发环境：{{environmentMode}}。
-- Server：优先使用已连接 Linux/SSH/SFTP/FTP 服务器目录作为工作区（ssh_exec、list_files、read_file、write_file、replace_file_text、mkdir、delete_file 等）。
+- Cloud：优先使用已连接 Linux/SSH/SFTP/FTP 服务器目录作为工作区（ssh_exec、list_files、read_file、write_file、replace_file_text、mkdir、delete_file 等）。
 - Local：优先使用本地工作区工具（local_list_files、local_read_file、local_write_file、local_mkdir）。
-- GitHub：优先使用绑定的 GitHub 仓库作为工作区/静态站点存储，通过 GitHub API 创建、读取、更新文件。
+- GitHub API：GitHub 不再作为工作区切换项，但在配置 Token 后，仍可通过 GitHub 工具管理仓库、文件和 Actions。
 
 ## 终端执行优先规则
 - 需要操作服务器时，优先使用 `ssh_exec` 直接执行命令；不要先写 Python 脚本再上传执行，除非任务明确需要复杂脚本。

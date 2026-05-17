@@ -24,7 +24,6 @@ class AppState extends ChangeNotifier {
   String? activeServerId;
   String? boundWorkspaceId;
   CloudWorkspaceBinding? boundCloudWorkspace;
-  GitHubWorkspace? boundGitHubWorkspace;
   String customSystemPrompt = AgentSystemPrompt.defaultPrompt;
   DevelopmentEnvironment developmentEnvironment = DevelopmentEnvironment.server;
   bool autoReconnect = false;
@@ -96,7 +95,6 @@ class AppState extends ChangeNotifier {
       ..addAll((workspaceDoc['items'] as List? ?? []).whereType<Map>().map((e) => LocalWorkspace.fromJson(Map<String, dynamic>.from(e))));
     final bindings = Map<String, dynamic>.from(workspaceDoc['bindings'] as Map? ?? {});
     final cloudBindings = Map<String, dynamic>.from(workspaceDoc['cloudBindings'] as Map? ?? {});
-    final githubBindings = Map<String, dynamic>.from(workspaceDoc['githubBindings'] as Map? ?? {});
     final envs = Map<String, dynamic>.from(workspaceDoc['environments'] as Map? ?? {});
     if (savedConversationId != null && conversations.any((e) => e.id == savedConversationId)) {
       conversationId = savedConversationId;
@@ -107,9 +105,7 @@ class AppState extends ChangeNotifier {
     boundWorkspaceId = bindings[conversationId] as String?;
     final cloud = cloudBindings[conversationId];
     boundCloudWorkspace = cloud is Map ? CloudWorkspaceBinding.fromJson(Map<String, dynamic>.from(cloud)) : null;
-    final gh = githubBindings[conversationId];
-    boundGitHubWorkspace = gh is Map ? GitHubWorkspace.fromJson(Map<String, dynamic>.from(gh)) : null;
-    developmentEnvironment = DevelopmentEnvironment.values.firstWhere((e) => e.name == envs[conversationId], orElse: () => DevelopmentEnvironment.server);
+    developmentEnvironment = _parseDevelopmentEnvironment(envs[conversationId]);
     final githubDoc = await store.readMap('profiles', 'github', fallback: const {});
     github = GitHubConfig.fromJson(githubDoc);
     final promptDoc = await store.readMap('profiles', 'system_prompt', fallback: const {});
@@ -129,6 +125,11 @@ class AppState extends ChangeNotifier {
       final candidates = servers.where((e) => e.autoConnect || e.id == activeServerId).toList();
       if (candidates.isNotEmpty) Future.microtask(() => connect(candidates.first, persistAutoReconnect: true));
     }
+  }
+
+  DevelopmentEnvironment _parseDevelopmentEnvironment(Object? value) {
+    if (value == DevelopmentEnvironment.local.name) return DevelopmentEnvironment.local;
+    return DevelopmentEnvironment.server;
   }
 
   Future<void> setAgentMode(AgentMode mode) async {
@@ -197,30 +198,25 @@ class AppState extends ChangeNotifier {
     final workspaceDoc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}, 'cloudBindings': <String, dynamic>{}, 'environments': <String, dynamic>{}});
     final bindings = Map<String, dynamic>.from(workspaceDoc['bindings'] as Map? ?? {});
     final cloudBindings = Map<String, dynamic>.from(workspaceDoc['cloudBindings'] as Map? ?? {});
-    final githubBindings = Map<String, dynamic>.from(workspaceDoc['githubBindings'] as Map? ?? {});
     final envs = Map<String, dynamic>.from(workspaceDoc['environments'] as Map? ?? {});
     boundWorkspaceId = bindings[id] as String?;
     final cloud = cloudBindings[id];
     boundCloudWorkspace = cloud is Map ? CloudWorkspaceBinding.fromJson(Map<String, dynamic>.from(cloud)) : null;
-    final gh = githubBindings[id];
-    boundGitHubWorkspace = gh is Map ? GitHubWorkspace.fromJson(Map<String, dynamic>.from(gh)) : null;
-    developmentEnvironment = DevelopmentEnvironment.values.firstWhere((e) => e.name == envs[id], orElse: () => DevelopmentEnvironment.server);
+    developmentEnvironment = _parseDevelopmentEnvironment(envs[id]);
     notifyListeners();
   }
 
   Future<void> _saveConversations() => store.writeMap('memory', 'conversations', {'items': conversations.map((e) => e.toJson()).toList(), 'activeConversationId': conversationId});
 
   Future<void> _saveWorkspaces() async {
-    final doc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}, 'cloudBindings': <String, dynamic>{}, 'githubBindings': <String, dynamic>{}, 'environments': <String, dynamic>{}});
+    final doc = await store.readMap('profiles', 'workspaces', fallback: {'bindings': <String, dynamic>{}, 'cloudBindings': <String, dynamic>{}, 'environments': <String, dynamic>{}});
     final bindings = Map<String, dynamic>.from(doc['bindings'] as Map? ?? {});
     final cloudBindings = Map<String, dynamic>.from(doc['cloudBindings'] as Map? ?? {});
-    final githubBindings = Map<String, dynamic>.from(doc['githubBindings'] as Map? ?? {});
     final envs = Map<String, dynamic>.from(doc['environments'] as Map? ?? {});
     if (boundWorkspaceId == null) { bindings.remove(conversationId); } else { bindings[conversationId] = boundWorkspaceId; }
     if (boundCloudWorkspace == null) { cloudBindings.remove(conversationId); } else { cloudBindings[conversationId] = boundCloudWorkspace!.toJson(); }
-    if (boundGitHubWorkspace == null) { githubBindings.remove(conversationId); } else { githubBindings[conversationId] = boundGitHubWorkspace!.toJson(); }
     envs[conversationId] = developmentEnvironment.name;
-    await store.writeMap('profiles', 'workspaces', {'items': localWorkspaces.map((e) => e.toJson()).toList(), 'bindings': bindings, 'cloudBindings': cloudBindings, 'githubBindings': githubBindings, 'environments': envs});
+    await store.writeMap('profiles', 'workspaces', {'items': localWorkspaces.map((e) => e.toJson()).toList(), 'bindings': bindings, 'cloudBindings': cloudBindings, 'environments': envs});
   }
 
   Future<Directory> _workspaceRoot() async {
@@ -678,7 +674,7 @@ void _appendTerminalChunk(String chunk) {
       if (cfg.model.trim().isEmpty) throw StateError('未配置模型 ID。请进入 AI 配置填写模型名称。');
       if (cfg.apiKey.trim().isEmpty) throw StateError('未配置 API Key。请进入 AI 配置填写密钥。');
 
-      final systemPrompt = AgentSystemPrompt.build(basePrompt: customSystemPrompt, hasGitHub: github.isConnected, permissionMode: permissionMode.name, environmentMode: developmentEnvironment.name);
+      final systemPrompt = AgentSystemPrompt.build(basePrompt: customSystemPrompt, hasGitHub: github.isConnected, permissionMode: permissionMode.name, environmentMode: developmentEnvironment.label);
       final req = _buildAiRequest(systemPrompt, prompt, includeExistingCurrentUser: !isContinuation ? false : true);
 
       if (cfg.streamOutput) {
@@ -1257,42 +1253,6 @@ ${_toolUsageExample(call.tool)}''';
     return '已触发 GitHub Actions：$workflow@$ref';
   }
 
-  Future<String> createGitHubWorkspace({required String name, required bool private, String description = '', bool enablePages = false}) async {
-    final repoJson = await _githubRequest('POST', '/user/repos', body: {'name': name, 'private': private, 'description': description, 'auto_init': true});
-    final repo = jsonDecode(repoJson) as Map<String, dynamic>;
-    final owner = (repo['owner'] as Map<String, dynamic>)['login'] as String;
-    final repoName = repo['name'] as String;
-    final branch = repo['default_branch'] as String? ?? 'main';
-    String? pagesUrl;
-    if (enablePages) pagesUrl = await enableGitHubPages(owner: owner, repo: repoName, branch: branch);
-    boundGitHubWorkspace = GitHubWorkspace(owner: owner, repo: repoName, branch: branch, pagesEnabled: enablePages, pagesUrl: pagesUrl);
-    developmentEnvironment = DevelopmentEnvironment.github;
-    await _saveWorkspaces();
-    notifyListeners();
-    return '$owner/$repoName';
-  }
-
-  Future<void> bindGitHubWorkspace({required String owner, required String repo, String branch = 'main'}) async {
-    boundGitHubWorkspace = GitHubWorkspace(owner: owner, repo: repo, branch: branch);
-    developmentEnvironment = DevelopmentEnvironment.github;
-    await _saveWorkspaces();
-    notifyListeners();
-  }
-
-  Future<String> enableGitHubPages({required String owner, required String repo, String branch = 'main'}) async {
-    try {
-      await _githubRequest('POST', '/repos/$owner/$repo/pages', body: {'source': {'branch': branch, 'path': '/'}});
-    } catch (_) {
-      await _githubRequest('PUT', '/repos/$owner/$repo/pages', body: {'source': {'branch': branch, 'path': '/'}});
-    }
-    final url = 'https://$owner.github.io/$repo/';
-    if (boundGitHubWorkspace?.owner == owner && boundGitHubWorkspace?.repo == repo) {
-      boundGitHubWorkspace = GitHubWorkspace(owner: owner, repo: repo, branch: branch, pagesEnabled: true, pagesUrl: url);
-      await _saveWorkspaces();
-      notifyListeners();
-    }
-    return url;
-  }
 
   Future<String> testGitHubConnection() async {
     final result = await _githubRequest('GET', '/user');

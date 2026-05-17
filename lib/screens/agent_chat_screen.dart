@@ -764,15 +764,13 @@ class _EnvMenuItem extends StatelessWidget {
 }
 
 IconData _envIcon(DevelopmentEnvironment env) => switch (env) {
-  DevelopmentEnvironment.server => Icons.dns_outlined,
+  DevelopmentEnvironment.server => Icons.cloud_outlined,
   DevelopmentEnvironment.local => Icons.laptop_mac_rounded,
-  DevelopmentEnvironment.github => Icons.hub_outlined,
 };
 
 String _envHint(DevelopmentEnvironment env) => switch (env) {
-  DevelopmentEnvironment.server => '优先使用服务器工作区',
+  DevelopmentEnvironment.server => '优先使用 Cloud 服务器工作区',
   DevelopmentEnvironment.local => '优先使用本地工作区',
-  DevelopmentEnvironment.github => '优先使用 GitHub 仓库',
 };
 
 class _ModeChip extends StatelessWidget {
