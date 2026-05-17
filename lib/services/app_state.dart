@@ -20,7 +20,6 @@ class AppState extends ChangeNotifier {
   final conversations = <ConversationMeta>[];
   final localWorkspaces = <LocalWorkspace>[];
   final terminalLogs = <String>['LunaLink SSH Terminal ready.'];
-  BrowserSnapshot? browserSnapshot;
   GitHubConfig github = const GitHubConfig();
   String? activeServerId;
   String? boundWorkspaceId;
@@ -575,7 +574,6 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     notifyListeners();
   }
 
-  void clearBrowserSnapshot() { browserSnapshot = null; notifyListeners(); }
   void clearLiveCodeChange() { liveCodeChange = null; notifyListeners(); }
 
   Future<void> sendAgentTask(String content) async {
@@ -818,9 +816,10 @@ Future<void> sendTerminalKey(String sequence, String label) async {
         case 'ssh_command':
         case 'ssh_exec':
           if (!terminalEnabled) throw StateError('No Linux SSH server connected / terminal disabled. Use file tools only for SFTP/FTP virtual-host mode. 简单来说就是你没有连接 Linux 服务器，当前模式不能执行终端命令。');
-          final command = _firstString(call.arguments, ['command', 'cmd', 'script', 'bash', 'shell'], 'ls -la');
-          output = await ssh.exec(command);
+          final command = _extractSshCommand(call);
           terminalLogs.add('\$ $command');
+          notifyListeners();
+          output = await ssh.exec(command);
           terminalLogs.add(output.trim().isEmpty ? '[no output]' : output);
           break;
         case 'terminal_wait':
@@ -924,14 +923,6 @@ Future<void> sendTerminalKey(String sequence, String label) async {
             await refreshFiles();
           }
           break;
-        case 'browser_open':
-      case 'web_open':
-      case 'web_search':
-      case 'browser_search':
-      case 'browser_click':
-      case 'web_click':
-        output = await _browserFetch(call);
-          break;
         case 'github_api':
         case 'github_request':
           output = await _githubGenericRequest(call);
@@ -995,7 +986,6 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     } catch (e) {
       final err = _toolErrorMessage(call, e);
       _replaceTool(toolCallId, ToolCallRecord(id: call.id, tool: call.tool, arguments: call.arguments, status: 'error', output: err));
-      if (call.tool == 'ssh_exec') terminalLogs.add('ERROR: $err');
     } finally {
       notifyListeners();
       await _rewriteMemoryFromMessages();
@@ -1009,6 +999,15 @@ Future<void> sendTerminalKey(String sequence, String label) async {
       if (value is String && value.trim().isNotEmpty) return value;
     }
     throw StateError('Missing required parameter `${keys.first}`. Accepted aliases: ${keys.join(', ')}. Example: $example');
+  }
+
+  String _extractSshCommand(ToolCallRecord call) {
+    var command = _firstString(call.arguments, ['command', 'cmd', 'script', 'bash', 'shell', 'input', 'code'], 'ls -la').trim();
+    final fenced = RegExp(r'^```(?:bash|sh|shell)?\s*\n([\s\S]*?)\n?```\s*$', caseSensitive: false).firstMatch(command);
+    if (fenced != null) command = fenced.group(1)?.trim() ?? command;
+    command = command.replaceAll('\r\n', '\n').trim();
+    if (command.isEmpty) throw StateError('ssh_exec command is empty after cleanup.');
+    return command;
   }
 
   ToolCallRecord _normalizeToolCall(ToolCallRecord call) {
@@ -1028,9 +1027,6 @@ Future<void> sendTerminalKey(String sequence, String label) async {
     'create_dir': 'mkdir', 'make_directory': 'mkdir',
     'local_ls': 'local_list_files', 'workspace_list_files': 'local_list_files', 'local_cat': 'local_read_file', 'workspace_read_file': 'local_read_file',
     'local_write': 'local_write_file', 'workspace_write_file': 'local_write_file', 'local_create_file': 'local_write_file', 'local_create_dir': 'local_mkdir', 'workspace_mkdir': 'local_mkdir',
-'browser': 'browser_open', 'web': 'browser_open', 'open_url': 'browser_open', 'browser_open': 'browser_open', 'web_open': 'browser_open',
-      'click_link': 'browser_click', 'browser_click': 'browser_click', 'web_click': 'browser_click',
-      'search': 'web_search', 'web_search': 'web_search', 'browser_search': 'web_search',
     'github_api': 'github_api', 'github_request': 'github_api',
     'github_me': 'github_verify_token', 'github_user': 'github_verify_token',
     'github_repos': 'github_list_repos', 'github_repo': 'github_get_repo',
@@ -1064,109 +1060,6 @@ ${_toolUsageExample(call.tool)}
 正确调用示例：
 ${_toolUsageExample(call.tool)}''';
 
-  Future<String> _browserFetch(ToolCallRecord call) async {
-    if (call.tool == 'browser_click' || call.tool == 'web_click') {
-      final target = _resolveBrowserClickTarget(call);
-      if (target == null) throw StateError('没有可点击的浏览器链接。请先 web_search/browser_open，或传入 url/text/index。');
-      final redirected = ToolCallRecord(id: call.id, tool: 'browser_open', arguments: {'url': target}, status: call.status);
-      return _browserFetch(redirected);
-    }
-    final query = call.arguments['query']?.toString().trim() ?? '';
-    final rawUrl = call.arguments['url']?.toString().trim();
-    final url = rawUrl != null && rawUrl.isNotEmpty
-        ? rawUrl
-        : 'https://www.bing.com/search?q=${Uri.encodeQueryComponent(query.isEmpty ? _requiredString(call, 'query', 'Flutter') : query)}';
-    final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
-    final res = await http.get(uri, headers: {'User-Agent': 'Mozilla/5.0 LunaLink-Agent Browser'}).timeout(const Duration(seconds: 25));
-    if (res.statusCode < 200 || res.statusCode >= 400) throw StateError('Browser HTTP ${res.statusCode}: ${_clip(res.body, 600)}');
-    final html = res.body;
-    final title = _htmlTitle(html) ?? uri.toString();
-    final text = _htmlToText(html);
-    final links = _extractLinks(html, uri).take(18).toList();
-    var detail = '';
-    if ((call.tool == 'web_search' || call.tool == 'browser_search') && links.isNotEmpty) {
-      final fetched = <String>[];
-      for (final link in links.take(4)) {
-        try {
-          final page = await _fetchPageText(Uri.parse(link));
-          if (page != null && page.text.trim().isNotEmpty) {
-            fetched.add('### ${page.title}\nURL: ${page.url}\n${_clip(page.text, 1800)}');
-          }
-        } catch (_) {}
-      }
-      if (fetched.isNotEmpty) detail = '\n\nFollowed result pages:\n${fetched.join('\n\n')}';
-    }
-    browserSnapshot = BrowserSnapshot(url: uri.toString(), title: title, html: html, text: text, links: links, updatedAt: DateTime.now());
-    notifyListeners();
-    final linkText = links.isEmpty ? '' : '\n\nExtracted links:\n${links.take(12).map((e) => '- $e').join('\n')}';
-    return 'Browser loaded: $title\nURL: ${uri.toString()}\n\nHTML length: ${html.length}\nText preview:\n${_clip(text, 3200)}$linkText$detail';
-  }
-
-  String? _resolveBrowserClickTarget(ToolCallRecord call) {
-    final direct = call.arguments['url']?.toString().trim();
-    if (direct != null && direct.isNotEmpty) return direct.startsWith('http') ? direct : 'https://$direct';
-    final links = browserSnapshot?.links ?? const <String>[];
-    final rawIndex = call.arguments['index'] ?? call.arguments['link'];
-    if (rawIndex != null) {
-      final index = rawIndex is num ? rawIndex.toInt() : int.tryParse(rawIndex.toString());
-      if (index != null && index > 0 && index <= links.length) return links[index - 1];
-    }
-    final needle = (call.arguments['text'] ?? call.arguments['query'] ?? call.arguments['contains'])?.toString().trim().toLowerCase();
-    if (needle != null && needle.isNotEmpty) {
-      for (final link in links) {
-        if (link.toLowerCase().contains(needle)) return link;
-      }
-    }
-    return links.isNotEmpty ? links.first : null;
-  }
-
-  String? _htmlTitle(String html) => RegExp(r'<title[^>]*>([\s\S]*?)<\/title>', caseSensitive: false).firstMatch(html)?.group(1)?.replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  String _htmlToText(String html) => html
-      .replaceAll(RegExp(r'<script[\s\S]*?<\/script>', caseSensitive: false), ' ')
-      .replaceAll(RegExp(r'<style[\s\S]*?<\/style>', caseSensitive: false), ' ')
-      .replaceAll(RegExp(r'<noscript[\s\S]*?<\/noscript>', caseSensitive: false), ' ')
-      .replaceAll(RegExp(r'<br\s*\/?>', caseSensitive: false), '\n')
-      .replaceAll(RegExp(r'<\/(p|div|section|article|h[1-6]|li)>', caseSensitive: false), '\n')
-      .replaceAll(RegExp(r'<[^>]+>'), ' ')
-      .replaceAll('&nbsp;', ' ')
-      .replaceAll('&amp;', '&')
-      .replaceAll('&lt;', '<')
-      .replaceAll('&gt;', '>')
-      .replaceAll('"', '"')
-      .replaceAll('&#39;', "'")
-      .replaceAll(RegExp(r'[ \t\x0B\f\r]+'), ' ')
-      .replaceAll(RegExp(r'\n\s*\n+'), '\n')
-      .trim();
-
-  List<String> _extractLinks(String html, Uri base) {
-    final links = <String>[];
-    final seen = <String>{};
-    for (final m in RegExp(r'''<a\s+[^>]*href=["']([^"'#]+)["']''', caseSensitive: false).allMatches(html)) {
-      final raw = m.group(1)?.trim();
-      if (raw == null || raw.isEmpty || raw.startsWith('javascript:') || raw.startsWith('mailto:') || raw.startsWith('tel:')) continue;
-      var resolved = base.resolve(raw).toString();
-      if (resolved.contains('/url?')) {
-        final u = Uri.tryParse(resolved)?.queryParameters['url'] ?? Uri.tryParse(resolved)?.queryParameters['q'];
-        if (u != null && u.startsWith('http')) resolved = u;
-      }
-      if (!resolved.startsWith('http')) continue;
-      if (seen.add(resolved)) links.add(resolved);
-    }
-    return links;
-  }
-
-  Future<({String url, String title, String text})?> _fetchPageText(Uri uri) async {
-    final res = await http.get(uri, headers: {'User-Agent': 'Mozilla/5.0 LunaLink-Agent Browser', 'Accept': 'text/html,application/xhtml+xml'}).timeout(const Duration(seconds: 12));
-    if (res.statusCode < 200 || res.statusCode >= 400) return null;
-    final contentType = res.headers['content-type'] ?? '';
-    if (contentType.isNotEmpty && !contentType.contains('text/html') && !contentType.contains('text/plain')) return null;
-    final html = res.body;
-    return (url: uri.toString(), title: _htmlTitle(html) ?? uri.toString(), text: _htmlToText(html));
-  }
-
-  String _clip(String value, int max) => value.length <= max ? value : value.substring(0, max);
-
   Future<String> _githubGenericRequest(ToolCallRecord call) async {
     final method = (call.arguments['method']?.toString() ?? 'GET').toUpperCase();
     final path = _requiredString(call, 'path', '/user');
@@ -1185,9 +1078,6 @@ ${_toolUsageExample(call.tool)}''';
 
   String _toolUsageExample(String tool) {
     final args = switch (tool) {
-      'browser_open' => {'url': 'https://example.com'},
-      'browser_click' => {'index': 1},
-      'web_search' => {'query': 'Flutter WebView'},
       'github_api' => {'method': 'GET', 'path': '/user', 'body': <String, dynamic>{}},
       'local_list_files' => <String, dynamic>{},
       'local_read_file' => {'path': 'README.md'},

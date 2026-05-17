@@ -220,16 +220,6 @@ class LocalWorkspace {
   factory LocalWorkspace.fromJson(Map<String, dynamic> json) => LocalWorkspace(id: json['id'] as String? ?? '', name: json['name'] as String? ?? 'workspace', path: json['path'] as String? ?? '');
 }
 
-class BrowserSnapshot {
-  final String url;
-  final String title;
-  final String html;
-  final String text;
-  final List<String> links;
-  final DateTime updatedAt;
-  const BrowserSnapshot({required this.url, required this.title, required this.html, required this.text, this.links = const [], required this.updatedAt});
-}
-
 class ToolCallRecord {
   final String id;
   final String tool;

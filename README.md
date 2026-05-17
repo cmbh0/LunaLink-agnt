@@ -4,7 +4,7 @@
 
 - [LINUX DO](https://linux.do)
 
-LunaLink Agent 是一款面向 Android 的 Flutter 移动端 Code Agent 应用。它将服务器连接、远程/本地文件管理、GitHub API、内置浏览器、上下文记忆和 AI 自动化编程工作流整合到手机端，让用户可以直接在 Android 设备上完成从需求规划、工具调用、代码修改到云端构建验证的完整开发闭环。
+LunaLink Agent 是一款面向 Android 的 Flutter 移动端 Code Agent 应用。它将服务器连接、远程/本地文件管理、GitHub API、上下文记忆和 AI 自动化编程工作流整合到手机端，让用户可以直接在 Android 设备上完成从需求规划、工具调用、代码修改到云端构建验证的完整开发闭环。
 
 ## 核心定位
 
@@ -13,7 +13,6 @@ LunaLink Agent 不是普通聊天应用，而是一个移动端 AI 开发工作�
 - 通过 SSH/SFTP/FTP 连接服务器或虚拟主机。
 - 通过本地工作区管理每个对话独立绑定的项目文件。
 - 通过 GitHub REST API 操作仓库、文件、Issues、Actions 等资源。
-- 通过内置浏览器联网搜索、打开网页并提取内容。
 - 通过 Code Agent 工作流自动规划任务、调用工具、接收结果并继续执行，直到任务完成。
 
 ## 已实现能力
@@ -59,12 +58,6 @@ LunaLink Agent 不是普通聊天应用，而是一个移动端 AI 开发工作�
 - 支持仓库文件读取、创建、更新、删除以及 Actions 构建触发和日志拉取。
 - 适合配合 GitHub Actions 完成移动端云编译和 Release 构建验证。
 
-### 内置浏览器与联网搜索
-
-- 提供 AI 可调用的浏览器打开和联网搜索能力。
-- 内置浏览器以悬浮窗口展示，支持拖动、最小化、返回、刷新和关闭。
-- AI 调用浏览器工具时可获取网页标题、URL、HTML/纯文本摘要，并继续用于任务推理。
-
 ### UI 与交互
 
 - Android Flutter 工程，使用 Material 3。
@@ -109,5 +102,4 @@ LunaLink Agent 仍在持续开发中，当前重点方向包括：
 
 - 提升 FTP/SFTP/SSH 文件操作兼容性。
 - 完善 Code Agent 自动化任务执行稳定性。
-- 优化内置浏览器的网页内容提取能力。
 - 在真实 Android 设备上持续验证 UI、权限、文件管理和云编译流程。

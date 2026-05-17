@@ -292,9 +292,6 @@ class AgentSystemPrompt {
 - ssh_exec：真实执行服务器终端命令：`{"command":"ls -la && pwd"}`。这是服务器命令首选工具。
 - terminal_wait：等待后查看终端日志：`{"delayMs":3000}`
 
-- browser_open：打开指定 URL，返回 HTML 清洗文本、标题和可继续打开的链接：`{"url":"https://example.com"}`。可直接用 Extracted links 中的目标链接继续跳转。
-- browser_click / web_click：模拟点击内置浏览器当前页面的链接。参数可用 `{"index":1}` 点击上次提取的第 1 个链接，或 `{"text":"文档"}` 按链接文本/URL 关键词匹配跳转，或 `{"url":"https://example.com/page"}` 直接跳转。
-- web_search：联网搜索并自动提取搜索结果页链接，优先跟进前几个结果页返回正文摘要：`{"query":"Flutter WebView"}`。如果搜索页只给出表面结果，应继续使用 browser_click 或 browser_open 打开 Extracted links 里的目标 URL。
 
 ### GitHub 工具（通用真实 API）
 - github_api：调用任意 GitHub REST API，覆盖 Issues/PR/Actions/Branches/Releases/Packages/Orgs/Teams/Gists/Search/Commits/Deployments 等 GitHub API 支持的能力：`{"method":"GET","path":"/user","body":{}}`
