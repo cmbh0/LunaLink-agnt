@@ -136,6 +136,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
     final state = context.watch<AppState>();
     final cfg = state.activeAiConfig;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('AI 配置')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         _label('当前配置'),
@@ -181,7 +182,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
         const Text('总结使用当前配置与模型。达到阈值后会把上下文压缩为一条 summary 记忆，用于延长上下文。', style: TextStyle(fontSize: 11, color: MoonColors.muted, height: 1.35)),
         const SizedBox(height: 8),
         SwitchListTile(dense: true, contentPadding: EdgeInsets.zero, value: stream, onChanged: (v) => setState(() => stream = v), title: const Text('流式输出 (SSE)', style: TextStyle(fontSize: 14)), subtitle: const Text('若一直等待无内容，可关闭后重试；错误会直接显示在气泡里。')),
-        if (testResult != null) Container(margin: const EdgeInsets.only(top: 4, bottom: 8), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(10), border: Border.all(color: MoonColors.edge)), child: SelectableText(testResult!, style: const TextStyle(fontSize: 12, color: MoonColors.text))),
+        if (testResult != null) Container(margin: const EdgeInsets.only(top: 4, bottom: 8), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: MoonGlass.panel2(context), borderRadius: BorderRadius.circular(10), border: Border.all(color: MoonColors.edge)), child: SelectableText(testResult!, style: const TextStyle(fontSize: 12, color: MoonColors.text))),
         const SizedBox(height: 10),
         _themeCard(state),
         const SizedBox(height: 10),
@@ -202,7 +203,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
     final options = state.aiConfigs.map((e) => MoonSelectOption<String>(value: e.id, label: '${e.name} · ${e.model}', icon: Icons.smart_toy_outlined)).toList();
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+      decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('AI 分工', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: MoonColors.text)),
         const SizedBox(height: 8),
@@ -218,7 +219,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
 
   Widget _themeCard(AppState state) => Container(
     padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+    decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('主题与背景', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: MoonColors.text)),
       const SizedBox(height: 6),
@@ -370,7 +371,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
       builder: (_) => StatefulBuilder(builder: (context, setSheet) => Container(
         height: MediaQuery.sizeOf(context).height * .72,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             const Expanded(child: Text('选择可用模型', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
@@ -387,7 +388,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
               hintText: '搜索模型关键词，例如 gpt / deepseek / vision',
               isDense: true,
               filled: true,
-              fillColor: MoonColors.panel2,
+              fillColor: MoonGlass.panel2(context),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: MoonColors.edge)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: MoonColors.edge)),
@@ -457,7 +458,7 @@ class _AiConfigPageState extends State<AiConfigPage> {
 
   Widget _field(TextEditingController c, String label, {bool obscure = false, String? hint}) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: TextField(controller: c, obscureText: obscure, style: const TextStyle(fontSize: 14), decoration: InputDecoration(labelText: label, hintText: hint, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), filled: true, fillColor: MoonColors.panel2, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.accent)))),
+    child: TextField(controller: c, obscureText: obscure, style: const TextStyle(fontSize: 14), decoration: InputDecoration(labelText: label, hintText: hint, isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), filled: true, fillColor: MoonGlass.panel2(context), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.edge)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: MoonColors.accent)))),
   );
 
   Widget _label(String t) => Padding(padding: const EdgeInsets.only(top: 8, bottom: 6), child: Text(t, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: MoonColors.muted)));
@@ -486,7 +487,7 @@ class _TinyDropdown<T> extends StatelessWidget {
         backgroundColor: Colors.transparent,
         builder: (_) => Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+          decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
           child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: labels.entries.map((e) {
             final active = e.key == value;
             return Padding(
@@ -509,7 +510,7 @@ class _TinyDropdown<T> extends StatelessWidget {
     },
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
+      decoration: BoxDecoration(color: MoonGlass.panel2(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
       child: Row(children: [Expanded(child: Text(labels[value] ?? value.toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: MoonColors.text))), const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: MoonColors.muted)]),
     ),
   );
@@ -551,9 +552,10 @@ class SponsorPage extends StatelessWidget {
   static const wechatId = 'CMBH_LYF';
   @override
   Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.transparent,
     appBar: AppBar(title: const Text('赞助与交流')),
     body: ListView(padding: const EdgeInsets.all(18), children: [
-      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: MoonColors.edge)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(22), border: Border.all(color: MoonColors.edge)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('本工具由北海 cmbh 制作', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         const Text('如果你想赞赏或交流，请添加作者微信并说明来意。', style: TextStyle(fontSize: 15, color: MoonColors.muted)),
@@ -596,7 +598,7 @@ class _SponsorAction extends StatelessWidget {
   final VoidCallback onTap;
   const _SponsorAction({required this.icon, required this.title, required this.subtitle, required this.onTap});
   @override
-  Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(18), child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)), child: Row(children: [Icon(icon, color: MoonColors.accent), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(fontSize: 12, color: MoonColors.muted))])), const Icon(Icons.chevron_right_rounded, color: MoonColors.muted)])));
+  Widget build(BuildContext context) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(18), child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)), child: Row(children: [Icon(icon, color: MoonColors.accent), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(fontSize: 12, color: MoonColors.muted))])), const Icon(Icons.chevron_right_rounded, color: MoonColors.muted)])));
 }
 
 Future<void> _openUrl(String url) async {
@@ -615,7 +617,7 @@ class _TopBar extends StatelessWidget {
     final state = context.watch<AppState>();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(.97), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 2))]),
+      decoration: BoxDecoration(color: MoonGlass.enabled(context) ? MoonGlass.panel(context) : Colors.white.withOpacity(.97), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 2))]),
       child: Row(children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
           _TopIconButton(onTap: () => Scaffold.of(context).openDrawer(), icon: const Icon(Icons.menu_rounded, size: 21), tooltip: '对话历史'),
@@ -694,7 +696,7 @@ class _EnvSwitch extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: const BoxConstraints(),
       tooltip: '开发环境',
-      color: Colors.white,
+      color: MoonGlass.panel(context),
       elevation: 10,
       shadowColor: Colors.black.withOpacity(.10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: MoonColors.edge)),
@@ -708,7 +710,7 @@ class _EnvSwitch extends StatelessWidget {
       )).toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 10, offset: const Offset(0, 3))]),
+        decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 10, offset: const Offset(0, 3))]),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 12.5, color: MoonColors.muted),
           const SizedBox(width: 5),
@@ -755,7 +757,7 @@ class _ModeChip extends StatelessWidget {
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-      decoration: BoxDecoration(color: selected ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(16), boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 6, offset: const Offset(0, 1))] : null),
+      decoration: BoxDecoration(color: selected ? MoonGlass.panel(context) : Colors.transparent, borderRadius: BorderRadius.circular(16), boxShadow: selected ? [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 6, offset: const Offset(0, 1))] : null),
       child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: selected ? MoonColors.text : MoonColors.muted))),
     ),
   );
@@ -802,7 +804,7 @@ class _Bubble extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isUser ? MoonColors.accent.withOpacity(.09) : Colors.white,
+              color: isUser ? MoonColors.accent.withOpacity(.13) : MoonGlass.panel(context),
               borderRadius: BorderRadius.circular(16),
               border: isUser ? null : Border.all(color: MoonColors.edge, width: .6),
               boxShadow: isUser ? null : [BoxShadow(color: Colors.black.withOpacity(.02), blurRadius: 8, offset: const Offset(0, 2))],
@@ -990,7 +992,7 @@ class _HoverCopyCodeBlockState extends State<_HoverCopyCodeBlock> {
             child: IgnorePointer(
               ignoring: !showCopy,
               child: Material(
-                color: Colors.white.withOpacity(.92),
+                color: MoonGlass.enabled(context) ? MoonGlass.panel(context) : Colors.white.withOpacity(.92),
                 borderRadius: BorderRadius.circular(9),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(9),
@@ -1029,7 +1031,7 @@ class _ToolCardState extends State<_ToolCard> {
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
+      decoration: BoxDecoration(color: MoonGlass.panel2(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -1101,7 +1103,7 @@ class _ChangeCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: MoonColors.panel2, borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
+      decoration: BoxDecoration(color: MoonGlass.panel2(context), borderRadius: BorderRadius.circular(12), border: Border.all(color: MoonColors.edge)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [const Icon(Icons.difference_outlined, size: 15, color: MoonColors.accent), const SizedBox(width: 5), Expanded(child: Text(change.path, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))), Text(change.status, style: const TextStyle(fontSize: 10, color: MoonColors.muted))]),
         const SizedBox(height: 4),
@@ -1136,7 +1138,7 @@ class _Composer extends StatelessWidget {
           ),
         Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 16, offset: const Offset(0, 5))]),
+        decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.circular(28), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 16, offset: const Offset(0, 5))]),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
             controller: controller,
@@ -1187,7 +1189,7 @@ Future<void> _showTodoSheet(BuildContext context, AgentTodoPlan plan) async {
     backgroundColor: Colors.transparent,
     builder: (_) => Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('任务目标', style: TextStyle(fontSize: 12, color: MoonColors.muted, fontWeight: FontWeight.w700)),
         const SizedBox(height: 5),
@@ -1218,7 +1220,7 @@ Future<void> _showQuickModelSwitch(BuildContext context, AppState state, AiServi
     backgroundColor: Colors.transparent,
     builder: (_) => Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Padding(padding: EdgeInsets.fromLTRB(4, 4, 4, 10), child: Text('切换模型', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
         for (final m in models) Padding(
@@ -1292,7 +1294,7 @@ class _LiveCodeOverlayState extends State<_LiveCodeOverlay> {
         child: GestureDetector(
           onPanUpdate: (d) => setState(() => pos += d.delta),
           onTap: () => setState(() => minimized = false),
-          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Icon(Icons.nightlight_round, color: Colors.white, size: 25))),
+          child: Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, gradient: const LinearGradient(colors: [Color(0xFF5746D8), Color(0xFF8C7BFF)]), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), blurRadius: 16)]), child: const Center(child: Icon(Icons.nightlight_round, color: MoonGlass.panel(context), size: 25))),
         ),
       );
     }

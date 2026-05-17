@@ -84,6 +84,7 @@ class _FileViewerScreenState extends State<FileViewerScreen> {
   Widget build(BuildContext context) {
     final value = text;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: Text(widget.path.split('/').last), actions: [if (editable) IconButton(onPressed: _save, icon: const Icon(Icons.save_rounded))]),
       body: value == null ? const Center(child: CircularProgressIndicator()) : Padding(padding: const EdgeInsets.all(12), child: _body(value)),
     );

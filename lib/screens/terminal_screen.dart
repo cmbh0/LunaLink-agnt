@@ -37,6 +37,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('SSH 终端')),
       body: SafeArea(child: Column(children: [
         if (running) const LinearProgressIndicator(minHeight: 2),

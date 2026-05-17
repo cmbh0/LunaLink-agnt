@@ -1,4 +1,7 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/app_state.dart';
 
 class MoonColors {
   static const bg = Color(0xFFFFFFFF);
@@ -85,7 +88,7 @@ class MoonSelectField<T> extends StatelessWidget {
           backgroundColor: Colors.transparent,
           builder: (_) => Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+            decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
             child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Padding(padding: const EdgeInsets.fromLTRB(4, 2, 4, 10), child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: MoonColors.text))),
               for (final item in options) Padding(
@@ -95,7 +98,7 @@ class MoonSelectField<T> extends StatelessWidget {
                   onTap: () => Navigator.pop(context, item.value),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                    decoration: BoxDecoration(color: item.value == value ? const Color(0xFFF7F4FF) : MoonColors.panel2, borderRadius: BorderRadius.circular(14), border: Border.all(color: item.value == value ? const Color(0xFFE2D8FF) : MoonColors.edge)),
+                    decoration: BoxDecoration(color: item.value == value ? const Color(0xFFF7F4FF) : MoonGlass.panel2(context), borderRadius: BorderRadius.circular(14), border: Border.all(color: item.value == value ? const Color(0xFFE2D8FF) : MoonColors.edge)),
                     child: Row(children: [
                       if (item.icon != null) ...[Icon(item.icon, size: 18, color: item.value == value ? MoonColors.accent : MoonColors.muted), const SizedBox(width: 10)],
                       Expanded(child: Text(item.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: item.value == value ? MoonColors.accent : MoonColors.text))),
@@ -114,5 +117,29 @@ class MoonSelectField<T> extends StatelessWidget {
         child: Text(current?.label ?? '未选择', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: MoonColors.text)),
       ),
     );
+  }
+}
+
+
+class MoonGlass {
+  static bool enabled(BuildContext context) => context.select<AppState, bool>((s) => (s.uiBackgroundPath ?? '').isNotEmpty);
+  static Color panel(BuildContext context) => enabled(context) ? Colors.white.withOpacity(.58) : Colors.white;
+  static Color panel2(BuildContext context) => enabled(context) ? Colors.white.withOpacity(.34) : MoonColors.panel2;
+  static Color edge(BuildContext context) => enabled(context) ? Colors.white.withOpacity(.42) : MoonColors.edge;
+  static List<BoxShadow> shadow(BuildContext context) => enabled(context) ? [BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 24, offset: const Offset(0, 10))] : [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 14, offset: const Offset(0, 5))];
+}
+
+class MoonGlassSurface extends StatelessWidget {
+  final Widget child;
+  final BorderRadius borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  const MoonGlassSurface({super.key, required this.child, this.borderRadius = const BorderRadius.all(Radius.circular(18)), this.padding, this.margin});
+  @override
+  Widget build(BuildContext context) {
+    final glass = MoonGlass.enabled(context);
+    final box = Container(margin: margin, padding: padding, decoration: BoxDecoration(color: MoonGlass.panel(context), borderRadius: borderRadius, border: Border.all(color: MoonGlass.edge(context)), boxShadow: MoonGlass.shadow(context)), child: child);
+    if (!glass) return box;
+    return ClipRRect(borderRadius: borderRadius, child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22), child: box));
   }
 }

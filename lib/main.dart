@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/agent_chat_screen.dart';
@@ -16,7 +18,7 @@ class LunaLinkApp extends StatelessWidget {
       child: Consumer<AppState>(builder: (context, state, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'LunaLink Agent',
-        theme: MoonTheme.light,
+        theme: state.uiBackgroundPath == null ? MoonTheme.light : MoonTheme.light.copyWith(scaffoldBackgroundColor: Colors.transparent, canvasColor: Colors.transparent, appBarTheme: MoonTheme.light.appBarTheme.copyWith(backgroundColor: Colors.white.withOpacity(.38))),
         onGenerateRoute: (settings) => PageRouteBuilder<void>(
           settings: settings,
           transitionDuration: const Duration(milliseconds: 260),
@@ -27,6 +29,15 @@ class LunaLinkApp extends StatelessWidget {
             child: SlideTransition(position: Tween(begin: const Offset(0, .025), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)), child: child),
           ),
         ),
+        builder: (context, child) {
+          final bg = state.uiBackgroundPath;
+          if (bg == null || bg.isEmpty) return child ?? const SizedBox.shrink();
+          return Stack(children: [
+            Positioned.fill(child: Image.file(File(bg), fit: BoxFit.cover)),
+            Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: Container(color: Colors.white.withOpacity(.14)))),
+            child ?? const SizedBox.shrink(),
+          ]);
+        },
         home: const HomeShell(),
       )),
     );

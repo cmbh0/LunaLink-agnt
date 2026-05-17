@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
@@ -13,20 +11,13 @@ class MoonScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final bg = state.uiBackgroundPath;
-    final hasBg = bg != null && bg.isNotEmpty;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawerScrimColor: Colors.black.withOpacity(.10),
       drawer: const _ConversationDrawer(),
       appBar: appBar,
       floatingActionButton: floatingActionButton,
-      body: Stack(children: [
-        if (hasBg) Positioned.fill(child: Image.file(File(bg), fit: BoxFit.cover)),
-        if (hasBg) Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14), child: Container(color: Colors.white.withOpacity(.18)))),
-        SafeArea(child: child),
-      ]),
+      body: SafeArea(child: child),
     );
   }
 }
@@ -44,7 +35,7 @@ class _ConversationDrawerState extends State<_ConversationDrawer> {
     final state = context.watch<AppState>();
     return Drawer(
       width: MediaQuery.sizeOf(context).width * .72,
-      backgroundColor: const Color(0xFFFBFBFD),
+      backgroundColor: MoonGlass.panel(context),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(24))),
       child: SafeArea(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
@@ -83,7 +74,7 @@ class _ConversationDrawerState extends State<_ConversationDrawer> {
                     margin: const EdgeInsets.only(left: 12, right: 4, bottom: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: MoonGlass.panel(context),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: MoonColors.edge),
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 10, offset: const Offset(0, 3))],
@@ -123,7 +114,7 @@ class _HistoryAction extends StatelessWidget {
         Container(
           width: 28,
           height: 28,
-          decoration: BoxDecoration(color: danger ? Colors.red.withOpacity(.08) : MoonColors.panel2, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: danger ? Colors.red.withOpacity(.08) : MoonGlass.panel2(context), borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, size: 16, color: danger ? Colors.red : MoonColors.text),
         ),
         const SizedBox(height: 2),
