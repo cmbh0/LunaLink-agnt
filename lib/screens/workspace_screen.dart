@@ -18,18 +18,19 @@ class WorkspaceScreen extends StatelessWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(14), border: Border.all(color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0))),
+          decoration: BoxDecoration(color: state.developmentEnvironment == DevelopmentEnvironment.server ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(14), border: Border.all(color: state.developmentEnvironment == DevelopmentEnvironment.server ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0))),
           child: Row(children: [
-            Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 18, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF2563EB) : const Color(0xFF16A34A)),
+            Icon(state.developmentEnvironment == DevelopmentEnvironment.server ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 18, color: state.developmentEnvironment == DevelopmentEnvironment.server ? const Color(0xFF2563EB) : const Color(0xFF16A34A)),
             const SizedBox(width: 8),
-            Expanded(child: Text('当前开发环境：${state.developmentEnvironment.label}。切换后 AI 工具优先级会随之调整。', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: state.developmentEnvironment == DevelopmentEnvironment.cloud ? const Color(0xFF1D4ED8) : const Color(0xFF15803D)))),
+            Expanded(child: Text('当前开发环境：${state.developmentEnvironment.label}。切换后 AI 工具优先级会随之调整。', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: state.developmentEnvironment == DevelopmentEnvironment.server ? const Color(0xFF1D4ED8) : const Color(0xFF15803D)))),
           ]),
         ),
         const SizedBox(height: 12),
         SegmentedButton<DevelopmentEnvironment>(
           segments: const [
-            ButtonSegment(value: DevelopmentEnvironment.cloud, icon: Icon(Icons.cloud_outlined), label: Text('Cloud')),
+            ButtonSegment(value: DevelopmentEnvironment.server, icon: Icon(Icons.dns_outlined), label: Text('Server')),
             ButtonSegment(value: DevelopmentEnvironment.local, icon: Icon(Icons.laptop_mac_rounded), label: Text('Local')),
+            ButtonSegment(value: DevelopmentEnvironment.github, icon: Icon(Icons.hub_outlined), label: Text('GitHub')),
           ],
           selected: {state.developmentEnvironment},
           onSelectionChanged: (v) => context.read<AppState>().setDevelopmentEnvironment(v.first),
@@ -61,9 +62,9 @@ class WorkspaceScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Cloud 工作目录绑定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const Text('Server 工作目录绑定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            const Text('Cloud 不在应用内创建工作区；这里只是绑定服务器上的一个目录，AI 可在该目录内继续创建项目目录和操作文件。', style: TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.4)),
+            const Text('Server 不在应用内创建工作区；这里只是绑定服务器上的一个目录，AI 可在该目录内继续创建项目目录和操作文件。', style: TextStyle(fontSize: 12, color: MoonColors.muted, height: 1.4)),
             const SizedBox(height: 10),
             MoonSelectField<String>(
               value: state.boundCloudWorkspace?.serverId ?? '',
@@ -74,7 +75,7 @@ class WorkspaceScreen extends StatelessWidget {
             const SizedBox(height: 10),
             TextFormField(
               initialValue: state.boundCloudWorkspace?.path ?? state.currentPath,
-              decoration: const InputDecoration(labelText: 'Cloud 目录路径', hintText: '/home/user/project'),
+              decoration: const InputDecoration(labelText: 'Server 目录路径', hintText: '/home/user/project'),
               onFieldSubmitted: (v) {
                 final serverId = state.boundCloudWorkspace?.serverId ?? state.activeServerId;
                 if (serverId != null) context.read<AppState>().bindCloudWorkspace(serverId: serverId, path: v);
@@ -82,8 +83,23 @@ class WorkspaceScreen extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              OutlinedButton.icon(onPressed: state.activeServerId == null ? null : () => context.read<AppState>().bindCloudWorkspace(serverId: state.activeServerId, path: state.currentPath), icon: const Icon(Icons.my_location_rounded), label: const Text('绑定当前 Cloud 目录')),
-              if (state.boundCloudWorkspace != null) OutlinedButton.icon(onPressed: () => context.read<AppState>().bindCloudWorkspace(), icon: const Icon(Icons.link_off_rounded), label: const Text('解绑 Cloud')),
+              OutlinedButton.icon(onPressed: state.activeServerId == null ? null : () => context.read<AppState>().bindCloudWorkspace(serverId: state.activeServerId, path: state.currentPath), icon: const Icon(Icons.my_location_rounded), label: const Text('绑定当前服务器目录')),
+              if (state.boundCloudWorkspace != null) OutlinedButton.icon(onPressed: () => context.read<AppState>().bindCloudWorkspace(), icon: const Icon(Icons.link_off_rounded), label: const Text('解绑服务器')),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: MoonColors.edge)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('GitHub 仓库工作区', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(state.boundGitHubWorkspace == null ? '未绑定 GitHub 仓库。可在 GitHub 设置中配置 Token 后创建/绑定仓库。' : '已绑定：${state.boundGitHubWorkspace!.fullName} · ${state.boundGitHubWorkspace!.branch}', style: const TextStyle(fontSize: 12, color: MoonColors.muted)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              OutlinedButton.icon(onPressed: () => context.read<AppState>().setDevelopmentEnvironment(DevelopmentEnvironment.github), icon: const Icon(Icons.hub_outlined), label: const Text('切换到 GitHub')),
+              OutlinedButton.icon(onPressed: () => Navigator.pushNamed(context, '/github'), icon: const Icon(Icons.settings_outlined), label: const Text('GitHub 设置')),
             ]),
           ]),
         ),
@@ -124,7 +140,7 @@ class WorkspaceScreen extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, String id) async {
-    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('确认删除本地工作区'), content: const Text('本地工作区文件和 .backup 将一起删除。Cloud 绑定不会受影响。'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除'))]));
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(title: const Text('确认删除本地工作区'), content: const Text('本地工作区文件和 .backup 将一起删除。Server 绑定不会受影响。'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除'))]));
     if (ok == true && context.mounted) await context.read<AppState>().deleteLocalWorkspace(id);
   }
 }

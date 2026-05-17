@@ -15,6 +15,10 @@ class _GitHubSettingsScreenState extends State<GitHubSettingsScreen> {
   bool autoApprove = false;
   String? testResult;
   bool testing = false;
+  final repoName = TextEditingController(text: 'lunalink-workspace');
+  final repoDesc = TextEditingController(text: 'LunaLink workspace');
+  bool privateRepo = true;
+  bool enablePages = false;
 
   @override
   void initState() {
@@ -25,7 +29,7 @@ class _GitHubSettingsScreenState extends State<GitHubSettingsScreen> {
   }
 
   @override
-  void dispose() { token.dispose(); super.dispose(); }
+  void dispose() { token.dispose(); repoName.dispose(); repoDesc.dispose(); super.dispose(); }
 
   Future<void> _save() async {
     await context.read<AppState>().saveGitHubConfig(GitHubConfig(token: token.text.trim(), autoApprove: autoApprove));
@@ -37,6 +41,16 @@ class _GitHubSettingsScreenState extends State<GitHubSettingsScreen> {
     try {
       final result = await context.read<AppState>().testGitHubConnection();
       if (mounted) setState(() { testResult = '✅ $result'; testing = false; });
+    } catch (e) {
+      if (mounted) setState(() { testResult = '❌ $e'; testing = false; });
+    }
+  }
+
+  Future<void> _createWorkspace() async {
+    setState(() { testing = true; testResult = null; });
+    try {
+      final full = await context.read<AppState>().createGitHubWorkspace(name: repoName.text.trim(), private: privateRepo, description: repoDesc.text.trim(), enablePages: enablePages);
+      if (mounted) setState(() { testResult = '✅ 已创建并绑定 GitHub 工作区：$full'; testing = false; });
     } catch (e) {
       if (mounted) setState(() { testResult = '❌ $e'; testing = false; });
     }
@@ -73,6 +87,22 @@ class _GitHubSettingsScreenState extends State<GitHubSettingsScreen> {
           Expanded(child: OutlinedButton.icon(onPressed: testing ? null : _test, icon: testing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.link_rounded, size: 18), label: const Text('测试连接'))),
         ]),
         if (testResult != null) Container(margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF6F7FB), borderRadius: BorderRadius.circular(12)), child: SelectableText(testResult!, style: const TextStyle(fontSize: 13))),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('GitHub 工作区 / Pages', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            TextField(controller: repoName, decoration: const InputDecoration(labelText: '仓库名称', hintText: 'my-site')),
+            const SizedBox(height: 8),
+            TextField(controller: repoDesc, decoration: const InputDecoration(labelText: '描述', hintText: 'workspace description')),
+            SwitchListTile(contentPadding: EdgeInsets.zero, value: privateRepo, onChanged: (v) => setState(() => privateRepo = v), title: const Text('私有仓库')),
+            SwitchListTile(contentPadding: EdgeInsets.zero, value: enablePages, onChanged: (v) => setState(() => enablePages = v), title: const Text('创建后开启 GitHub Pages 静态服务')),
+            FilledButton.icon(onPressed: testing ? null : _createWorkspace, icon: const Icon(Icons.add_rounded), label: const Text('创建并绑定 GitHub 工作区')),
+            if (context.watch<AppState>().boundGitHubWorkspace?.pagesUrl != null) Padding(padding: const EdgeInsets.only(top: 8), child: SelectableText('Pages: ${context.watch<AppState>().boundGitHubWorkspace!.pagesUrl}')),
+          ]),
+        ),
         const SizedBox(height: 24),
         Container(
           padding: const EdgeInsets.all(14),

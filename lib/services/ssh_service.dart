@@ -49,11 +49,32 @@ class SshService {
   }
 
   Future<String> exec(String command) async {
+    final buffer = StringBuffer();
+    await execStream(command, onChunk: buffer.write);
+    return buffer.toString();
+  }
+
+  Future<String> execStream(String command, {void Function(String chunk)? onChunk}) async {
     final client = _requireClient();
-    final session = await client.execute(command);
-    final out = await utf8.decodeStream(session.stdout.cast<List<int>>());
-    final err = await utf8.decodeStream(session.stderr.cast<List<int>>());
-    return err.trim().isEmpty ? out : '$out\n$err';
+    final session = await client.execute(command, pty: SSHPtyConfig(term: 'xterm-256color', width: 120, height: 32));
+    final buffer = StringBuffer();
+    final done = Completer<void>();
+    void add(List<int> data) {
+      final text = utf8.decode(data, allowMalformed: true);
+      buffer.write(text);
+      onChunk?.call(text);
+    }
+    final subOut = session.stdout.listen(add);
+    final subErr = session.stderr.listen(add);
+    session.done.then((_) async {
+      await subOut.cancel();
+      await subErr.cancel();
+      if (!done.isCompleted) done.complete();
+    }).catchError((e) {
+      if (!done.isCompleted) done.completeError(e);
+    });
+    await done.future;
+    return buffer.toString();
   }
 
   Future<ServerInfo> readInfo() async {

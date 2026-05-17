@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/ai_models.dart';
 import '../services/app_state.dart';
+import '../services/ai_client.dart';
 import '../theme/moon_theme.dart';
 import 'connect_screen.dart';
 import 'file_manager_screen.dart';
@@ -145,6 +146,9 @@ class _AiConfigPageState extends State<AiConfigPage> {
         ),
         const SizedBox(height: 10),
         _roleSelectors(state),
+        const SizedBox(height: 10),
+        _SystemPromptCard(prompt: state.customSystemPrompt),
+        const SizedBox(height: 10),
         const SizedBox(height: 12),
         _field(name, '配置名称'),
         _field(endpoint, 'API Base URL', hint: 'https://api.openai.com/v1'),
@@ -452,6 +456,42 @@ class _AiConfigPageState extends State<AiConfigPage> {
   }
 }
 
+class _SystemPromptCard extends StatefulWidget {
+  final String prompt;
+  const _SystemPromptCard({required this.prompt});
+  @override
+  State<_SystemPromptCard> createState() => _SystemPromptCardState();
+}
+
+class _SystemPromptCardState extends State<_SystemPromptCard> {
+  late final TextEditingController c = TextEditingController(text: widget.prompt);
+  @override
+  void didUpdateWidget(covariant _SystemPromptCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.prompt != widget.prompt && c.text != widget.prompt) c.text = widget.prompt;
+  }
+  @override
+  void dispose() { c.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('系统提示词', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: MoonColors.text)),
+      const SizedBox(height: 6),
+      const Text('可编辑完整默认提示词。保留 {{environmentMode}} / {{permissionMode}} / {{githubTools}} 可让运行时动态信息继续注入。', style: TextStyle(fontSize: 11, color: MoonColors.muted, height: 1.35)),
+      const SizedBox(height: 8),
+      TextField(controller: c, minLines: 8, maxLines: 16, style: const TextStyle(fontFamily: 'monospace', fontSize: 12), decoration: const InputDecoration(labelText: 'System Prompt', alignLabelWithHint: true)),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: FilledButton.icon(onPressed: () async { await context.read<AppState>().saveCustomSystemPrompt(c.text); if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('系统提示词已保存'))); }, icon: const Icon(Icons.save_rounded, size: 18), label: const Text('保存更改'))),
+        const SizedBox(width: 8),
+        Expanded(child: OutlinedButton.icon(onPressed: () async { await context.read<AppState>().restoreDefaultSystemPrompt(); c.text = AgentSystemPrompt.defaultPrompt; }, icon: const Icon(Icons.restore_rounded, size: 18), label: const Text('恢复默认'))),
+      ]),
+    ]),
+  );
+}
+
 class _TinyDropdown<T> extends StatelessWidget {
   final T value;
   final Map<T, String> labels;
@@ -689,7 +729,7 @@ class _EnvSwitch extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: MoonColors.edge), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 10, offset: const Offset(0, 3))]),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(state.developmentEnvironment == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 12.5, color: MoonColors.muted),
+          Icon(_envIcon(state.developmentEnvironment), size: 12.5, color: MoonColors.muted),
           const SizedBox(width: 5),
           Text(state.developmentEnvironment.label, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: MoonColors.text)),
           const SizedBox(width: 2),
@@ -711,17 +751,29 @@ class _EnvMenuItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(color: selected ? const Color(0xFFF7F4FF) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: selected ? const Color(0xFFE2D8FF) : Colors.transparent)),
         child: Row(children: [
-          Icon(env == DevelopmentEnvironment.cloud ? Icons.cloud_outlined : Icons.laptop_mac_rounded, size: 18, color: selected ? MoonColors.accent : MoonColors.muted),
+          Icon(_envIcon(env), size: 18, color: selected ? MoonColors.accent : MoonColors.muted),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(env.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: selected ? MoonColors.accent : MoonColors.text)),
             const SizedBox(height: 2),
-            Text(env == DevelopmentEnvironment.cloud ? '优先使用服务器工具' : '优先使用本地工作区', style: const TextStyle(fontSize: 11, color: MoonColors.muted)),
+            Text(_envHint(env), style: const TextStyle(fontSize: 11, color: MoonColors.muted)),
           ])),
           if (selected) const Icon(Icons.check_circle_rounded, size: 17, color: MoonColors.accent),
         ]),
       );
 }
+
+IconData _envIcon(DevelopmentEnvironment env) => switch (env) {
+  DevelopmentEnvironment.server => Icons.dns_outlined,
+  DevelopmentEnvironment.local => Icons.laptop_mac_rounded,
+  DevelopmentEnvironment.github => Icons.hub_outlined,
+};
+
+String _envHint(DevelopmentEnvironment env) => switch (env) {
+  DevelopmentEnvironment.server => '优先使用服务器工作区',
+  DevelopmentEnvironment.local => '优先使用本地工作区',
+  DevelopmentEnvironment.github => '优先使用 GitHub 仓库',
+};
 
 class _ModeChip extends StatelessWidget {
   final bool selected;
@@ -1238,11 +1290,11 @@ Future<void> _showQuickModelSwitch(BuildContext context, AppState state, AiServi
 }
 
 String _serverName(AppState state) {
-  if (state.activeServerId == null || state.servers.isEmpty) return 'Cloud';
+  if (state.activeServerId == null || state.servers.isEmpty) return 'Server';
   for (final s in state.servers) {
     if (s.id == state.activeServerId) return s.name;
   }
-  return 'Cloud';
+  return 'Server';
 }
 
 class _LiveCodeOverlay extends StatefulWidget {

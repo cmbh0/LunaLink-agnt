@@ -82,7 +82,7 @@ class _SourceBadge extends StatelessWidget {
     final active = state.activeServerId == null ? null : state.servers.where((e) => e.id == state.activeServerId).toList();
     final label = isLocal
         ? 'Local：${state.activeWorkspace == null ? '未绑定本地工作区' : '${state.activeWorkspace!.name} · ${state.activeWorkspace!.path}'}'
-        : (active == null || active.isEmpty ? 'Cloud：未连接' : 'Cloud：${active.first.mode == ServerAccessMode.ftp ? 'FTP' : active.first.mode == ServerAccessMode.sftp ? 'SFTP' : 'Linux SSH'} · ${active.first.name}');
+        : (active == null || active.isEmpty ? 'Server：未连接' : 'Server：${active.first.mode == ServerAccessMode.ftp ? 'FTP' : active.first.mode == ServerAccessMode.sftp ? 'SFTP' : 'Linux SSH'} · ${active.first.name}');
     final color = isLocal ? const Color(0xFF16A34A) : const Color(0xFF2563EB);
     final bg = isLocal ? const Color(0xFFF0FDF4) : const Color(0xFFEFF6FF);
     final edge = isLocal ? const Color(0xFFBBF7D0) : const Color(0xFFBFDBFE);

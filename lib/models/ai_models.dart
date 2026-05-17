@@ -16,17 +16,19 @@ class ConversationMeta {
 }
 enum AgentMode { mtc, code }
 
-enum DevelopmentEnvironment { cloud, local }
+enum DevelopmentEnvironment { server, local, github }
 
 extension DevelopmentEnvironmentLabel on DevelopmentEnvironment {
   String get label => switch (this) {
-        DevelopmentEnvironment.cloud => 'Cloud',
+        DevelopmentEnvironment.server => 'Server',
         DevelopmentEnvironment.local => 'Local',
+        DevelopmentEnvironment.github => 'GitHub',
       };
 
   String get description => switch (this) {
-        DevelopmentEnvironment.cloud => '云端开发：AI 默认优先使用服务器 SSH/SFTP/FTP 与 Cloud 文件工具',
+        DevelopmentEnvironment.server => '服务器开发：AI 默认优先使用已连接 Linux/SSH/SFTP/FTP 服务器目录作为工作区',
         DevelopmentEnvironment.local => '本地开发：AI 默认优先使用当前对话绑定的本地工作区工具',
+        DevelopmentEnvironment.github => 'GitHub 开发：AI 默认优先使用绑定的 GitHub 仓库作为工作区/静态站点存储',
       };
 }
 
@@ -261,6 +263,21 @@ class LocalWorkspace {
   const LocalWorkspace({required this.id, required this.name, required this.path});
   Map<String, dynamic> toJson() => {'id': id, 'name': name, 'path': path};
   factory LocalWorkspace.fromJson(Map<String, dynamic> json) => LocalWorkspace(id: json['id'] as String? ?? '', name: json['name'] as String? ?? 'workspace', path: json['path'] as String? ?? '');
+}
+
+
+
+class GitHubWorkspace {
+  final String owner;
+  final String repo;
+  final String branch;
+  final String rootPath;
+  final bool pagesEnabled;
+  final String? pagesUrl;
+  const GitHubWorkspace({required this.owner, required this.repo, this.branch = 'main', this.rootPath = '', this.pagesEnabled = false, this.pagesUrl});
+  String get fullName => '$owner/$repo';
+  Map<String, dynamic> toJson() => {'owner': owner, 'repo': repo, 'branch': branch, 'rootPath': rootPath, 'pagesEnabled': pagesEnabled, 'pagesUrl': pagesUrl};
+  factory GitHubWorkspace.fromJson(Map<String, dynamic> json) => GitHubWorkspace(owner: json['owner'] as String? ?? '', repo: json['repo'] as String? ?? '', branch: json['branch'] as String? ?? 'main', rootPath: json['rootPath'] as String? ?? '', pagesEnabled: json['pagesEnabled'] as bool? ?? false, pagesUrl: json['pagesUrl'] as String?);
 }
 
 class ToolCallRecord {
